@@ -1,0 +1,347 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VendorBridge ERP - Sign In</title>
+  <link rel="stylesheet" href="{% static 'procurement/css/styles.css' %}">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    /* Styling specifically for Auth Page */
+    .auth-wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background-color: #ffffff;
+      font-family: 'Inter', sans-serif;
+      padding: 60px 20px;
+      box-sizing: border-box;
+    }
+    .auth-container {
+      width: 100%;
+      max-width: 450px;
+      padding: 40px;
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+      margin: auto;
+    }
+    .auth-header {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+    .auth-logo {
+      display: inline-block;
+      font-size: 2.25rem;
+      font-weight: 800;
+      color: var(--primary-purple);
+      margin-bottom: 10px;
+    }
+    .auth-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 5px;
+    }
+    .auth-subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .auth-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .auth-form .form-group {
+      margin-bottom: 0;
+    }
+    .input-icon-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .input-icon {
+      position: absolute;
+      left: 12px;
+      color: var(--text-muted);
+    }
+    .input-with-icon {
+      padding-left: 40px !important;
+    }
+    .toggle-text {
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 15px;
+    }
+    .toggle-link {
+      color: var(--secondary-teal);
+      cursor: pointer;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .toggle-link:hover {
+      color: var(--secondary-teal-hover);
+    }
+    .error-alert {
+      background-color: #fef2f2;
+      color: #b91c1c;
+      padding: 10px 15px;
+      border-radius: 6px;
+      border: 1px solid #fee2e2;
+      font-size: 0.85rem;
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+    .success-alert {
+      background-color: #f0fdf4;
+      color: #166534;
+      padding: 10px 15px;
+      border-radius: 6px;
+      border: 1px solid #bbf7d0;
+      font-size: 0.85rem;
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+    .vendor-fields {
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+      background-color: #f8fafc;
+    }
+    .vendor-legend {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--primary-purple);
+      padding: 0 8px;
+      text-transform: uppercase;
+    }
+    .quick-access {
+      margin-top: 25px;
+      padding-top: 20px;
+      border-top: 1px dashed #e2e8f0;
+    }
+    .quick-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #64748b;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .quick-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .quick-btn {
+      font-size: 0.75rem;
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: #475569;
+      text-align: left;
+      transition: all 0.15s ease;
+    }
+    .quick-btn:hover {
+      background-color: #f1f5f9;
+      color: #1e293b;
+      border-color: #cbd5e1;
+    }
+    input, select, textarea {
+      background-color: #ffffff !important;
+      border-color: #cbd5e1 !important;
+      color: #1e293b !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="auth-wrapper">
+    <div class="auth-container">
+      <div class="auth-header">
+        <div class="auth-logo">VB</div>
+        <h2 class="auth-title">VendorBridge</h2>
+        <p class="auth-subtitle">Procurement & Vendor Management ERP</p>
+      </div>
+
+      {% if error %}
+        <div class="error-alert">{{ error }}</div>
+      {% endif %}
+      {% if message %}
+        <div class="success-alert">{{ message }}</div>
+      {% endif %}
+
+      <!-- SIGN IN FORM -->
+      <form id="login-form" action="/login/" method="post" class="auth-form" style="display: {% if mode == 'register' %}none{% else %}flex{% endif %};">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="login">
+        
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <div class="input-icon-wrapper">
+            <i data-lucide="mail" class="input-icon" style="width: 18px; height: 18px;"></i>
+            <input type="email" name="email" id="login-email" required placeholder="name@company.com" class="form-control input-with-icon">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <div class="input-icon-wrapper">
+            <i data-lucide="lock" class="input-icon" style="width: 18px; height: 18px;"></i>
+            <input type="password" name="password" id="login-password" required placeholder="••••••••" class="form-control input-with-icon" value="password123">
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="padding: 10px; font-size: 0.95rem; justify-content: center;">
+          Sign In
+        </button>
+
+        <div class="toggle-text">
+          New to VendorBridge? <a href="#" onclick="toggleAuthMode('register')" class="toggle-link">Create an Account</a>
+        </div>
+      </form>
+
+      <!-- SIGN UP FORM -->
+      <form id="register-form" action="/register/" method="post" class="auth-form" style="display: {% if mode == 'register' %}flex{% else %}none{% endif %};">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="register">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">First Name</label>
+            <input type="text" name="first_name" required class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Last Name</label>
+            <input type="text" name="last_name" required class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <div class="input-icon-wrapper">
+            <i data-lucide="mail" class="input-icon" style="width: 16px; height: 16px;"></i>
+            <input type="email" name="email" required placeholder="name@company.com" class="form-control input-with-icon">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" name="password" required class="form-control" value="password123">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Access Role</label>
+            <select name="role" id="role-select-field" class="form-control" onchange="toggleVendorFields(this.value)">
+              <option value="Officer">Procurement Officer</option>
+              <option value="Vendor">Vendor Company</option>
+              <option value="Manager">Manager / Approver</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Vendor Specific Fields -->
+        <fieldset id="vendor-details-fieldset" class="vendor-fields" style="display: none;">
+          <legend class="vendor-legend">Vendor Profile Setup</legend>
+          <div class="form-group">
+            <label class="form-label">Company Name</label>
+            <input type="text" name="vendor_name" placeholder="e.g. NexGen Tech Ltd" class="form-control">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Category</label>
+              <select name="category" class="form-control">
+                <option value="IT Hardware">IT Hardware</option>
+                <option value="Office Supplies">Office Supplies</option>
+                <option value="Services & Logistics">Services & Logistics</option>
+                <option value="Facilities & Work">Facilities & Work</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">GST Number</label>
+              <input type="text" name="gst_number" placeholder="27AAAAA1111A1Z1" maxlength="15" class="form-control">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contact Phone</label>
+            <input type="text" name="phone" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Address</label>
+            <textarea name="address" class="form-control" style="height: 60px; resize: none;"></textarea>
+          </div>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary" style="padding: 10px; font-size: 0.95rem; justify-content: center;">
+          Create Account
+        </button>
+
+        <div class="toggle-text">
+          Already have an account? <a href="#" onclick="toggleAuthMode('login')" class="toggle-link">Sign In</a>
+        </div>
+      </form>
+
+      <!-- QUICK ACCESS DEMO ACCOUNTS -->
+      <div class="quick-access">
+        <h4 class="quick-title">Quick Demo Login</h4>
+        <div class="quick-grid">
+          <button class="quick-btn" onclick="quickLogin('officer@vendorbridge.com')">
+            <strong>Procurement Officer:</strong> officer@vendorbridge.com
+          </button>
+          <button class="quick-btn" onclick="quickLogin('manager@vendorbridge.com')">
+            <strong>Manager / Approver:</strong> manager@vendorbridge.com
+          </button>
+          <button class="quick-btn" onclick="quickLogin('admin@vendorbridge.com')">
+            <strong>System Admin:</strong> admin@vendorbridge.com
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function toggleAuthMode(mode) {
+      const loginForm = document.getElementById('login-form');
+      const registerForm = document.getElementById('register-form');
+      
+      if (mode === 'login') {
+        loginForm.style.display = 'flex';
+        registerForm.style.display = 'none';
+      } else {
+        loginForm.style.display = 'none';
+        registerForm.style.display = 'flex';
+      }
+    }
+
+    function toggleVendorFields(role) {
+      const fieldset = document.getElementById('vendor-details-fieldset');
+      if (role === 'Vendor') {
+        fieldset.style.display = 'block';
+        // Add required attribute dynamically to inner inputs
+        fieldset.querySelectorAll('input, textarea').forEach(el => {
+          if (el.name !== 'phone' && el.name !== 'address') el.required = true;
+        });
+      } else {
+        fieldset.style.display = 'none';
+        fieldset.querySelectorAll('input, textarea').forEach(el => el.required = false);
+      }
+    }
+
+    function quickLogin(email) {
+      document.getElementById('login-email').value = email;
+      document.getElementById('login-password').value = 'password123';
+      document.getElementById('login-form').submit();
+    }
+  </script>
+</body>
+</html>

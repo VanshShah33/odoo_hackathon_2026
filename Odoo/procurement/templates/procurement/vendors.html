@@ -1,0 +1,509 @@
+{% extends 'procurement/base.html' %}
+{% load static %}
+
+{% block page_title %}Vendors{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+  <div>
+    <h1 style="font-size: 1.75rem; font-weight: 700; color: var(--text-dark); margin: 0;">Vendors</h1>
+    <p class="subtitle" style="margin-top: 5px; margin-bottom: 0; color: var(--text-muted);">Manage supplier profiles and registrations</p>
+  </div>
+  <div style="display: flex; gap: 12px; align-items: center;">
+    <form method="POST" action="/vendors/" style="margin: 0;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="export_csv">
+      <button type="submit" class="btn btn-outline" style="display: inline-flex; align-items: center; gap: 8px;">
+        <i data-lucide="download" style="width: 16px; height: 16px;"></i> Export CSV Report
+      </button>
+    </form>
+    
+    {% if request.user.role == 'Officer' or request.user.role == 'Admin' %}
+    <button onclick="toggleRegisterModal(true)" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 8px;">
+      <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i> + Add Vendor
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+{% if error %}
+<div style="background-color: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 0.85rem;">
+  <strong>Error:</strong> {{ error }}
+</div>
+{% endif %}
+
+<!-- Full-Width Search Bar wrapper -->
+<div style="background-color: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+  <div class="search-input-wrapper" style="max-width: 100%;">
+    <i data-lucide="search" class="search-icon" style="width: 18px; height: 18px;"></i>
+    <input type="text" id="vendor-search-bar" value="{{ search }}" placeholder="Search bar ...... search by name, gst number, category..." class="form-control" style="padding-left: 42px; font-size: 0.95rem; height: 46px; border-color: var(--border-color);">
+  </div>
+</div>
+
+<!-- Status Filter Tabs -->
+<div style="display: flex; gap: 10px; margin-bottom: 25px; flex-wrap: wrap;">
+  <a href="/vendors/?status=All&search={{ search }}" style="text-decoration: none; display: inline-flex; align-items: center; padding: 8px 18px; border-radius: 6px; border: 1px solid {% if status_filter == 'All' %}var(--primary-purple){% else %}var(--border-color){% endif %}; font-weight: 600; font-size: 0.85rem; background-color: {% if status_filter == 'All' %}var(--primary-purple){% else %}white{% endif %}; color: {% if status_filter == 'All' %}white{% else %}var(--text-dark){% endif %}; transition: all 0.2s;">
+    All ({{ all_count }})
+  </a>
+  <a href="/vendors/?status=active&search={{ search }}" style="text-decoration: none; display: inline-flex; align-items: center; padding: 8px 18px; border-radius: 6px; border: 1px solid {% if status_filter == 'active' %}var(--primary-purple){% else %}var(--border-color){% endif %}; font-weight: 600; font-size: 0.85rem; background-color: {% if status_filter == 'active' %}var(--primary-purple){% else %}white{% endif %}; color: {% if status_filter == 'active' %}white{% else %}var(--text-dark){% endif %}; transition: all 0.2s;">
+    active ({{ active_count }})
+  </a>
+  <a href="/vendors/?status=Pending&search={{ search }}" style="text-decoration: none; display: inline-flex; align-items: center; padding: 8px 18px; border-radius: 6px; border: 1px solid {% if status_filter == 'Pending' %}var(--primary-purple){% else %}var(--border-color){% endif %}; font-weight: 600; font-size: 0.85rem; background-color: {% if status_filter == 'Pending' %}var(--primary-purple){% else %}white{% endif %}; color: {% if status_filter == 'Pending' %}white{% else %}var(--text-dark){% endif %}; transition: all 0.2s;">
+    Pending ({{ pending_count }})
+  </a>
+  <a href="/vendors/?status=Blocked&search={{ search }}" style="text-decoration: none; display: inline-flex; align-items: center; padding: 8px 18px; border-radius: 6px; border: 1px solid {% if status_filter == 'Blocked' %}var(--primary-purple){% else %}var(--border-color){% endif %}; font-weight: 600; font-size: 0.85rem; background-color: {% if status_filter == 'Blocked' %}var(--primary-purple){% else %}white{% endif %}; color: {% if status_filter == 'Blocked' %}white{% else %}var(--text-dark){% endif %}; transition: all 0.2s;">
+    Blocked ({{ blocked_count }})
+  </a>
+</div>
+
+<!-- Full-Width Suppliers Table -->
+<div class="table-container" style="box-shadow: 0 1px 3px rgba(0,0,0,0.02); margin-bottom: 25px;">
+  <table class="erp-table" id="vendors-data-table">
+    <thead>
+      <tr>
+        <th style="font-weight: 700; font-size: 0.85rem; padding: 14px 20px; width: 30%;">Vendor Name</th>
+        <th style="font-weight: 700; font-size: 0.85rem; padding: 14px 20px;">Category</th>
+        <th style="font-weight: 700; font-size: 0.85rem; padding: 14px 20px;">GST no.</th>
+        <th style="font-weight: 700; font-size: 0.85rem; padding: 14px 20px;">contact no.</th>
+        <th style="font-weight: 700; font-size: 0.85rem; padding: 14px 20px;">Status</th>
+        <th style="font-weight: 700; font-size: 0.85rem; padding: 14px 20px; text-align: center; width: 100px;">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in vendors %}
+      <tr class="vendor-row" data-name="{{ v.name|lower }}" data-gst="{{ v.gst_number|lower }}" data-category="{{ v.category|lower }}" data-status="{% if v.status == 'Active' %}active{% elif v.status == 'Under Review' %}pending{% else %}blocked{% endif %}" style="background-color: {% if selected_vendor.id == v.id %}rgba(113, 75, 103, 0.04){% endif %}; border-left: {% if selected_vendor.id == v.id %}4px solid var(--primary-purple){% else %}none{% endif %}; transition: background-color 0.15s;">
+        <td style="padding: 14px 20px; font-weight: 600; color: var(--text-dark);">
+          {{ v.name }}
+        </td>
+        <td style="padding: 14px 20px; color: var(--text-muted);">{{ v.category }}</td>
+        <td style="padding: 14px 20px; font-family: monospace; color: var(--text-dark);">{{ v.gst_number }}</td>
+        <td style="padding: 14px 20px; color: var(--text-muted);">{{ v.phone }}</td>
+        <td style="padding: 14px 20px;">
+          <span class="badge" style="{% if v.status == 'Active' %}background-color: #dcfce7; color: #15803d;{% elif v.status == 'Under Review' %}background-color: #fef3c7; color: #b45309;{% else %}background-color: #fee2e2; color: #b91c1c;{% endif %} font-size: 0.7rem; padding: 4px 8px; border-radius: 4px; font-weight: 600;">
+            {% if v.status == 'Active' %}Active{% elif v.status == 'Under Review' %}Pending{% else %}Blocked{% endif %}
+          </span>
+        </td>
+        <td style="padding: 14px 20px; text-align: center;">
+          <a href="/vendors/?selected_id={{ v.id }}&status={{ status_filter }}&search={{ search }}" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem; border-color: var(--primary-purple); color: var(--primary-purple); text-decoration: none; border-radius: 4px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; height: 28px; width: 64px;">
+            View
+          </a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px 20px; font-size: 0.85rem;">
+          No suppliers match the filter criteria.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Collapsible Selected Vendor details pane below the table -->
+{% if selected_vendor %}
+<div id="selected-vendor-details-section" class="card" style="margin-top: 30px; padding: 30px; border-top: 4px solid var(--primary-purple); box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+  <!-- Vendor Header & Action Controls -->
+  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 25px; flex-wrap: wrap; gap: 15px;">
+    <div>
+      <h2 style="font-size: 1.5rem; color: var(--text-dark); display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 700;">
+        {{ selected_vendor.name }}
+      </h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 5px;">
+        Category: <strong style="color: var(--text-dark);">{{ selected_vendor.category }}</strong> 
+        | Status: <strong style="color: {% if selected_vendor.status == 'Active' %}#15803d{% else %}#b91c1c{% endif %};">{% if selected_vendor.status == 'Active' %}Active{% elif selected_vendor.status == 'Under Review' %}Pending{% else %}Blocked{% endif %}</strong>
+      </p>
+    </div>
+    
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <!-- Request Re-evaluation / Approval Button -->
+      <form method="POST" action="/vendors/" style="margin: 0;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="request_approval">
+        <input type="hidden" name="vendor_id" value="{{ selected_vendor.id }}">
+        <button type="submit" class="btn btn-outline" style="color: var(--secondary-teal); border-color: var(--secondary-teal); display: inline-flex; align-items: center; gap: 8px;">
+          <i data-lucide="shield-check" style="width: 16px; height: 16px;"></i> Request Approval
+        </button>
+      </form>
+
+      {% if request.user.role == 'Officer' or request.user.role == 'Admin' %}
+      <form method="POST" action="/vendors/" style="margin: 0;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="toggle_status">
+        <input type="hidden" name="vendor_id" value="{{ selected_vendor.id }}">
+        {% if selected_vendor.status == 'Active' %}
+        <input type="hidden" name="status" value="Suspended">
+        <button type="submit" class="btn btn-danger" style="display: inline-flex; align-items: center; gap: 8px;">
+          <i data-lucide="slash" style="width: 16px; height: 16px;"></i> Block Vendor
+        </button>
+        {% else %}
+        <input type="hidden" name="status" value="Active">
+        <button type="submit" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 8px;">
+          <i data-lucide="check" style="width: 16px; height: 16px;"></i> Activate Vendor
+        </button>
+        {% endif %}
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Banner Message -->
+  {% if msg == 'approval_requested' %}
+  <div style="background-color: #ecfdf5; border: 1px solid #10b981; color: #065f46; padding: 12px 16px; border-radius: 6px; margin-bottom: 25px; font-size: 0.85rem; display: flex; align-items: center; gap: 8px;">
+    <i data-lucide="check-circle" style="width: 16px; height: 16px;"></i>
+    <strong>Success:</strong> Re-evaluation and approval request sent successfully to the Procurement Manager.
+  </div>
+  {% endif %}
+
+  <!-- Quick Metrics Grid (Performance Analytics Cards) -->
+  <div class="grid-4" style="margin-bottom: 15px;">
+    <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+      <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Total Orders</div>
+      <div style="font-size: 1.5rem; font-weight: 700; margin-top: 6px; color: var(--text-dark);">{{ selected_vendor.total_orders }}</div>
+    </div>
+    <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+      <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Procurement Value</div>
+      <div style="font-size: 1.5rem; font-weight: 700; margin-top: 6px; color: var(--text-dark);">₹{{ selected_vendor.total_procurement_value|floatformat:0 }}</div>
+    </div>
+    <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+      <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">RFQs Participated</div>
+      <div style="font-size: 1.5rem; font-weight: 700; margin-top: 6px; color: var(--text-dark);">{{ selected_vendor.rfqs_participated }}</div>
+    </div>
+    <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+      <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Quotes Submitted</div>
+      <div style="font-size: 1.5rem; font-weight: 700; margin-top: 6px; color: var(--text-dark);">{{ selected_vendor.quotations_submitted }}</div>
+    </div>
+  </div>
+
+  <div class="grid-4" style="margin-bottom: 25px;">
+    <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+      <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Approval Rate</div>
+      <div style="font-size: 1.5rem; font-weight: 700; margin-top: 6px; color: var(--text-dark);">{{ selected_vendor.approval_rate }}%</div>
+    </div>
+    <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+      <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Vendor Rating</div>
+      <div style="font-size: 1.5rem; font-weight: 700; margin-top: 6px; color: var(--primary-purple);">★ {{ selected_vendor.rating|floatformat:1 }}</div>
+    </div>
+    <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+      <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Cost Savings</div>
+      <div style="font-size: 1.5rem; font-weight: 700; margin-top: 6px; color: #15803d;">{{ selected_vendor.cost_saving_percentage }}%</div>
+    </div>
+    <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); text-align: center;">
+      <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Risk Score</div>
+      <div style="font-size: 1.5rem; font-weight: 700; margin-top: 6px; color: #b91c1c;">{{ selected_vendor.risk_score }}%</div>
+    </div>
+  </div>
+
+  <!-- Detail Info Columns -->
+  <div class="grid-2" style="margin-bottom: 25px;">
+    <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+      <h3 style="font-size: 1rem; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; font-weight: 600; color: var(--text-dark); display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="contact" style="width: 16px; height: 16px; color: var(--primary-purple);"></i> Company Contact Details
+      </h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+        <tr>
+          <td style="padding: 6px 0; font-weight: 600; color: var(--text-muted); width: 120px;">Contact Person:</td>
+          <td style="padding: 6px 0; color: var(--text-dark);">{{ selected_vendor.contact_person|default:"N/A" }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: 600; color: var(--text-muted);">Email Address:</td>
+          <td style="padding: 6px 0; color: var(--text-dark);">{{ selected_vendor.contact_email }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: 600; color: var(--text-muted);">Phone Number:</td>
+          <td style="padding: 6px 0; color: var(--text-dark);">{{ selected_vendor.phone|default:"N/A" }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: 600; color: var(--text-muted);">Office Address:</td>
+          <td style="padding: 6px 0; color: var(--text-dark); line-height: 1.4;">{{ selected_vendor.address|default:"N/A" }}</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color);">
+      <h3 style="font-size: 1rem; margin-bottom: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; font-weight: 600; color: var(--text-dark); display: flex; align-items: center; gap: 8px;">
+        <i data-lucide="shield-check" style="width: 16px; height: 16px; color: var(--primary-purple);"></i> Credentials & Compliance
+      </h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+        <tr>
+          <td style="padding: 6px 0; font-weight: 600; color: var(--text-muted); width: 120px;">GST Number:</td>
+          <td style="padding: 6px 0; color: var(--text-dark); font-family: monospace; font-weight: 600;">{{ selected_vendor.gst_number }}</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: 600; color: var(--text-muted);">Risk Category:</td>
+          <td style="padding: 6px 0; color: var(--text-dark);">
+            <span class="badge" style="font-size:0.65rem; {% if selected_vendor.risk_score > 30 %}background-color:#fee2e2; color:#b91c1c;{% else %}background-color:#dcfce7; color:#15803d;{% endif %}">
+              {{ selected_vendor.risk_score }}% (Score)
+            </span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; font-weight: 600; color: var(--text-muted);">Cost Savings:</td>
+          <td style="padding: 6px 0; color: var(--text-dark); font-weight: bold; color: var(--primary-purple);">
+            {{ selected_vendor.cost_saving_percentage }}% saved historically
+          </td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Rating Performance chart -->
+  <div style="border-top: 1px solid var(--border-color); padding-top: 25px; margin-bottom: 30px;">
+    <h3 style="font-size: 1rem; margin-bottom: 15px; font-weight: 600; color: var(--text-dark); display: flex; align-items: center; gap: 8px;">
+      <i data-lucide="trending-up" style="width: 16px; height: 16px; color: var(--secondary-teal);"></i> Vendor Rating Trend Graph
+    </h3>
+    <div style="position: relative; height: 200px; width: 100%; background-color: #f8fafc; border-radius: 8px; border: 1px solid var(--border-color); padding: 15px;">
+      <canvas id="vendorPerformanceChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Recent purchase order list -->
+  <div style="border-top: 1px solid var(--border-color); padding-top: 25px; margin-bottom: 30px;">
+    <h3 style="font-size: 1rem; margin-bottom: 15px; font-weight: 600; color: var(--text-dark); display: flex; align-items: center; gap: 8px;">
+      <i data-lucide="shopping-bag" style="width: 16px; height: 16px; color: var(--secondary-teal);"></i> Recent Purchase Orders
+    </h3>
+    <div class="table-container">
+      <table class="erp-table">
+        <thead>
+          <tr>
+            <th style="font-weight: 600;">PO Number</th>
+            <th style="font-weight: 600;">Date</th>
+            <th style="font-weight: 600;">RFQ Title</th>
+            <th style="font-weight: 600;">PO Total</th>
+            <th style="font-weight: 600;">Delivery Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for po in transactions %}
+          <tr>
+            <td style="font-weight: 600; font-family: monospace;">{{ po.po_number }}</td>
+            <td>{{ po.created_at|date:"Y-m-d" }}</td>
+            <td>{{ po.quotation.rfq.title }}</td>
+            <td style="font-weight: 600;">₹{{ po.quotation.total_price|floatformat:2 }}</td>
+            <td>
+              <span class="badge" style="background-color: #fae8ff; color: #86198f; font-size: 0.65rem; padding: 2px 8px; border-radius: 4px;">
+                {{ po.timeline_status }}
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">No transactions logged for this vendor.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recent invoices list -->
+  <div style="border-top: 1px solid var(--border-color); padding-top: 25px;">
+    <h3 style="font-size: 1rem; margin-bottom: 15px; font-weight: 600; color: var(--text-dark); display: flex; align-items: center; gap: 8px;">
+      <i data-lucide="file-text" style="width: 16px; height: 16px; color: var(--secondary-teal);"></i> Recent Invoices
+    </h3>
+    <div class="table-container">
+      <table class="erp-table">
+        <thead>
+          <tr>
+            <th style="font-weight: 600;">Invoice Number</th>
+            <th style="font-weight: 600;">PO Ref</th>
+            <th style="font-weight: 600;">Date</th>
+            <th style="font-weight: 600;">Total Value</th>
+            <th style="font-weight: 600;">Payment Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in recent_invoices %}
+          <tr>
+            <td style="font-weight: 600; font-family: monospace;">{{ inv.invoice_number }}</td>
+            <td style="font-family: monospace;">{{ inv.purchase_order.po_number }}</td>
+            <td>{{ inv.created_at|date:"Y-m-d" }}</td>
+            <td style="font-weight: 700; color: var(--primary-purple);">₹{{ inv.total_amount|floatformat:2 }}</td>
+            <td>
+              <span class="badge" style="{% if inv.status == 'Paid' %}background-color:#dcfce7; color:#15803d;{% else %}background-color:#fee2e2; color:#b91c1c;{% endif %} font-size: 0.65rem; padding: 2px 8px; border-radius: 4px;">
+                {{ inv.status }}
+              </span>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">No recent invoices logged.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="card" style="padding: 50px; text-align: center; color: var(--text-muted); margin-top: 25px;">
+  <i data-lucide="users" style="width: 48px; height: 48px; stroke-width: 1.5; color: var(--border-color); margin-bottom: 15px;"></i>
+  <h3 style="font-size: 1.1rem; font-weight: 600; color: var(--text-dark);">No Vendor Selected</h3>
+  <p style="font-size: 0.85rem; margin-top: 5px;">Select a vendor from the table above and click "View" to inspect their metrics, profile, and performance chart.</p>
+</div>
+{% endif %}
+
+<!-- Registration Modal -->
+<div id="register-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); z-index: 999; justify-content: center; align-items: center;">
+  <div class="card" style="width: 600px; margin-bottom: 0; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.15);">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 20px;">
+      <h2 style="font-size: 1.2rem; color: var(--text-dark); margin: 0; font-weight: 700;">Register New Supplier</h2>
+      <button onclick="toggleRegisterModal(false)" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+    </div>
+    
+    <form method="POST" action="/vendors/">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="register">
+      
+      <div class="form-group">
+        <label class="form-label">Company Name *</label>
+        <input type="text" name="name" required placeholder="e.g. Acme Components Ltd." class="form-control">
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Category *</label>
+          <select name="category" required class="form-control">
+            <option value="IT Hardware">IT Hardware</option>
+            <option value="Office Supplies">Office Supplies</option>
+            <option value="Services & Logistics">Services & Logistics</option>
+            <option value="Facilities & Work">Facilities & Work</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">GST Number *</label>
+          <input type="text" name="gst_number" required placeholder="e.g. 27AAAAA1111A1Z1" class="form-control" style="font-family: monospace;">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Contact Person</label>
+          <input type="text" name="contact_person" placeholder="e.g. John Doe" class="form-control">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Contact Email *</label>
+          <input type="email" name="contact_email" required placeholder="e.g. contact@acme.com" class="form-control">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Phone Number</label>
+          <input type="text" name="phone" placeholder="e.g. +91 9999999999" class="form-control">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Supplier Risk Score (%)</label>
+          <input type="number" name="risk_score" min="1" max="100" value="15" class="form-control">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Initial Status *</label>
+          <select name="status" required class="form-control">
+            <option value="Active">Active</option>
+            <option value="Under Review">Pending (Under Review)</option>
+            <option value="Suspended">Blocked (Suspended)</option>
+          </select>
+        </div>
+        
+      </div>
+
+      <div class="form-group" style="margin-top: 15px;">
+        <label class="form-label">Office Address</label>
+        <textarea name="address" rows="2" placeholder="Street, City, State, ZIP..." class="form-control"></textarea>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+        <button type="button" onclick="toggleRegisterModal(false)" class="btn btn-outline">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Vendor</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function toggleRegisterModal(show) {
+    const modal = document.getElementById('register-modal');
+    modal.style.display = show ? 'flex' : 'none';
+  }
+
+  // Real-time Client-Side filtering for Search Input
+  const searchInput = document.getElementById('vendor-search-bar');
+  if (searchInput) {
+    searchInput.addEventListener('input', function(e) {
+      const query = e.target.value.toLowerCase().trim();
+      const rows = document.querySelectorAll('#vendors-data-table tbody tr.vendor-row');
+      
+      rows.forEach(row => {
+        const name = row.getAttribute('data-name');
+        const gst = row.getAttribute('data-gst');
+        const category = row.getAttribute('data-category');
+        
+        if (name.includes(query) || gst.includes(query) || category.includes(query)) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    });
+  }
+
+  {% if selected_vendor %}
+  // Vendor Performance Trend Line Chart
+  const perfCtx = document.getElementById('vendorPerformanceChart').getContext('2d');
+  const chartData = JSON.parse('{{ chart_data_json|safe }}');
+  
+  // Create gradient fill
+  const gradient = perfCtx.createLinearGradient(0, 0, 0, 200);
+  gradient.addColorStop(0, 'rgba(0, 160, 157, 0.2)');
+  gradient.addColorStop(1, 'rgba(0, 160, 157, 0.0)');
+  
+  new Chart(perfCtx, {
+    type: 'line',
+    data: {
+      labels: chartData.labels || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+      datasets: [{
+        label: 'Quality / Delivery Rating (Max 5.0)',
+        data: chartData.data || [4.0, 4.1, 4.2, 4.2, 4.3, 4.3],
+        borderColor: '#00A09D',
+        backgroundColor: gradient,
+        tension: 0.2,
+        fill: true,
+        borderWidth: 2,
+        pointBackgroundColor: '#00A09D',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 1.5,
+        pointRadius: 4,
+        pointHoverRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: {
+          min: 0,
+          max: 5,
+          grid: { color: '#f1f5f9' },
+          ticks: { stepSize: 1, font: { size: 9, family: 'Inter' } }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 9, family: 'Inter' } }
+        }
+      }
+    }
+  });
+  {% endif %}
+</script>
+{% endblock %}

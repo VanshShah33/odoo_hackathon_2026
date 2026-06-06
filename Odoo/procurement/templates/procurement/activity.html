@@ -1,0 +1,47 @@
+{% extends 'procurement/base.html' %}
+{% load static %}
+
+{% block page_title %}Activity Log{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 25px;">
+  <h1>System Audit Log</h1>
+  <p class="subtitle" style="margin-bottom: 0;">Full chronologic timeline of operations, status updates, approvals, and user logins.</p>
+</div>
+
+<div class="card" style="margin-bottom: 0;">
+  <h2 class="card-title">Activity & Audit Timeline</h2>
+  <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: -10px; margin-bottom: 20px;">Complete history of system changes and user operations.</p>
+  
+  <div class="table-container">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th style="width: 180px;">Timestamp</th>
+          <th>Action Type</th>
+          <th>Operator User</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td style="font-weight: 500; font-family: monospace;">{{ log.timestamp|date:"Y-m-d H:i:s" }}</td>
+          <td>
+            <span class="badge" style="font-size: 0.65rem; background-color: #f1f5f9; color: var(--text-dark); border: 1px solid var(--border-color);">
+              {{ log.action }}
+            </span>
+          </td>
+          <td style="font-weight: 600; color: #475569;">{{ log.user.email }}</td>
+          <td style="color: var(--text-muted);">{{ log.details }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 20px;">No activity logs found in the database.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

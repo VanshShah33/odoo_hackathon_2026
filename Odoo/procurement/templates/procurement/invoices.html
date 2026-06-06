@@ -1,0 +1,295 @@
+{% extends 'procurement/base.html' %}
+{% load static %}
+{% load procurement_filters %}
+
+{% block page_title %}Invoices{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+  <div>
+    <h1>Supplier Invoices</h1>
+    <p class="subtitle" style="margin-bottom: 0;">Examine billing invoice records, audit tax breakdowns (CGST/SGST 9%), and update payment status.</p>
+  </div>
+</div>
+
+<!-- Filters -->
+<form method="GET" action="/invoices/" class="filter-panel" style="background-color: white; padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 25px;">
+  <div class="search-input-wrapper" style="max-width: 300px;">
+    <i data-lucide="search" class="search-icon" style="width: 16px; height: 16px;"></i>
+    <input type="text" name="search" value="{{ search }}" placeholder="Search invoice or PO number..." class="form-control">
+  </div>
+  
+  <div class="filter-actions" style="display: flex; gap: 12px; align-items: center;">
+    <div>
+      <select name="status" class="form-control" style="padding: 8px 12px; width: 160px;" onchange="this.form.submit()">
+        <option value="All" {% if status_filter == 'All' %}selected{% endif %}>All Statuses</option>
+        <option value="Posted" {% if status_filter == 'Posted' %}selected{% endif %}>Posted (Unpaid)</option>
+        <option value="Paid" {% if status_filter == 'Paid' %}selected{% endif %}>Paid</option>
+      </select>
+    </div>
+
+    <button type="submit" class="btn btn-outline" style="padding: 8px 16px;">
+      Filter
+    </button>
+    
+    {% if search or status_filter != 'All' %}
+    <a href="/invoices/" class="btn btn-outline" style="text-decoration: none; padding: 8px 16px;">Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Full-Width Invoice Directory Table -->
+<div class="card" style="margin-bottom: 25px; width: 100%; padding: 0; overflow: hidden;">
+  <div style="padding: 15px 20px; border-bottom: 1px solid var(--border-color); background-color: #f8fafc; display: flex; justify-content: space-between; align-items: center;">
+    <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-dark);">Supplier Invoices Ledger ({{ invoices|length }} Records)</span>
+  </div>
+  
+  <div class="table-container">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>Invoice Number</th>
+          <th>Vendor</th>
+          <th>Total Amount</th>
+          <th>PO Reference</th>
+          <th>Issued Date</th>
+          <th>Status</th>
+          <th style="text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in invoices %}
+        <tr style="cursor: pointer; background-color: {% if selected_invoice.id == inv.id %}#f1f5f9{% else %}transparent{% endif %}; transition: background-color 0.15s;" onclick="window.location.href='/invoices/?selected_id={{ inv.id }}&search={{ search }}&status={{ status_filter }}#invoice-details-anchor'">
+          <td style="font-weight: 700; font-family: monospace; color: var(--primary-purple);">{{ inv.invoice_number }}</td>
+          <td style="font-weight: 600; color: var(--text-dark);">{{ inv.purchase_order.quotation.vendor.name }}</td>
+          <td style="font-weight: 700; color: var(--text-dark);">₹{{ inv.total_amount|floatformat:2 }}</td>
+          <td style="font-family: monospace; font-size: 0.8rem;">{{ inv.purchase_order.po_number }}</td>
+          <td style="color: var(--text-muted); font-size: 0.8rem;">{{ inv.created_at|date:"Y-m-d" }}</td>
+          <td>
+            <span class="badge" style="font-size: 0.65rem; {% if inv.status == 'Paid' %}background-color:#dcfce7; color:#15803d;{% else %}background-color:#fee2e2; color:#b91c1c;{% endif %} font-weight: 600;">
+              {{ inv.status }}
+            </span>
+          </td>
+          <td style="text-align: right;" onclick="event.stopPropagation();">
+            <a href="/invoices/?selected_id={{ inv.id }}&search={{ search }}&status={{ status_filter }}#invoice-details-anchor" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+              <i data-lucide="eye" style="width: 12px; height: 12px;"></i> View Details
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px;">
+            No Invoices match your filters.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Anchor for smooth scrolling to details -->
+<div id="invoice-details-anchor" style="padding-top: 5px;"></div>
+
+<!-- Full-Width Selected Invoice Details (Below) -->
+<div style="width: 100%;">
+  {% if selected_invoice %}
+  <div class="card" style="padding-top: 0; padding-left: 0; padding-right: 0; border-top: 4px solid var(--primary-purple); box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+    
+    <!-- Odoo timeline tracking stepper -->
+    <div class="document-status-bar" style="margin-left: 0; margin-right: 0; margin-top: 0; padding: 12px 25px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
+      <span style="margin-right: auto; font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Invoice Status Tracker: <span style="font-family: monospace; color: var(--text-dark);">{{ selected_invoice.invoice_number }}</span></span>
+      <span class="status-step {% if selected_invoice.status == 'Draft' %}active{% else %}completed{% endif %}">Draft</span>
+      <span style="color:#cbd5e1;">&rarr;</span>
+      <span class="status-step {% if selected_invoice.status == 'Posted' %}active{% elif selected_invoice.status == 'Paid' %}completed{% endif %}">Posted</span>
+      <span style="color:#cbd5e1;">&rarr;</span>
+      <span class="status-step {% if selected_invoice.status == 'Paid' %}active{% endif %}">Paid</span>
+    </div>
+
+    <!-- Invoice Sheet Printable Area -->
+    <div id="printable-invoice-area" style="position: relative; padding: 25px;">
+      <!-- Watermark/Paid Badge -->
+      {% if selected_invoice.status == 'Paid' %}
+      <div style="position: absolute; top: 120px; right: 50px; border: 4px solid #15803d; color: #15803d; font-size: 2.2rem; font-weight: 900; padding: 10px 25px; border-radius: 8px; transform: rotate(15deg); opacity: 0.15; pointer-events: none; text-transform: uppercase;">
+        PAID STAMP
+      </div>
+      {% endif %}
+
+      <!-- Invoice Header Logo & Meta -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--primary-purple); padding-bottom: 20px; margin-bottom: 25px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="background-color: var(--primary-purple); color: white; width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem;">VB</div>
+            <span style="font-size: 1.3rem; font-weight: 800; color: var(--text-dark);">VendorBridge ERP</span>
+          </div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; font-weight: 500;">Procurement & Logistics Billing System</p>
+        </div>
+        
+        <div style="text-align: right;">
+          <h2 style="font-size: 1.4rem; color: var(--text-dark); font-family: monospace; font-weight: 800; margin: 0;">INVOICE</h2>
+          <div style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: var(--primary-purple); margin-top: 3px;">{{ selected_invoice.invoice_number }}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Date: {{ selected_invoice.created_at|date:"Y-m-d" }}</div>
+        </div>
+      </div>
+
+      <!-- Vendor & Billing Info -->
+      <div class="grid-2" style="margin-bottom: 30px;">
+        <div>
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 6px; letter-spacing: 0.5px;">Billed From (Supplier)</div>
+          <strong style="font-size: 1rem; color: var(--text-dark);">{{ selected_invoice.purchase_order.quotation.vendor.name }}</strong>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
+            GSTIN: <strong style="font-family: monospace; color: var(--text-dark);">{{ selected_invoice.purchase_order.quotation.vendor.gst_number }}</strong><br/>
+            Contact: {{ selected_invoice.purchase_order.quotation.vendor.contact_email }} | {{ selected_invoice.purchase_order.quotation.vendor.phone }}<br/>
+            Address: {{ selected_invoice.purchase_order.quotation.vendor.address }}
+          </div>
+        </div>
+        
+        <div style="text-align: right;">
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 6px; letter-spacing: 0.5px;">Billed To</div>
+          <strong style="font-size: 1rem; color: var(--text-dark);">VendorBridge Corporate</strong>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
+            PO Reference: <strong style="font-family: monospace; color: var(--text-dark);">{{ selected_invoice.purchase_order.po_number }}</strong><br/>
+            RFQ Reference: {{ selected_invoice.purchase_order.quotation.rfq.rfq_number }}<br/>
+            Payment Status: <strong style="color: {% if selected_invoice.status == 'Paid' %}#15803d{% else %}#b91c1c{% endif %};">{{ selected_invoice.status|upper }}</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Items Table -->
+      <div style="margin-bottom: 30px;">
+        <div class="table-container">
+          <table class="erp-table">
+            <thead>
+              <tr style="background-color: var(--primary-purple); color: white;">
+                <th style="color: white;">Description</th>
+                <th style="color: white; width: 80px;">Qty</th>
+                <th style="color: white; width: 140px;">Unit Price (₹)</th>
+                <th style="color: white; text-align: right; width: 140px;">Total Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in selected_invoice.purchase_order.quotation.items_quotation %}
+              <tr>
+                <td style="font-weight: 600;">
+                  {{ item.name }}
+                  <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">{{ item.spec }}</div>
+                </td>
+                <td>{{ item.qty }}</td>
+                <td>₹{{ item.unit_price|floatformat:2 }}</td>
+                <td style="text-align: right; font-family: monospace;">₹{{ item.qty|multiply:item.unit_price|floatformat:2 }}</td>
+              </tr>
+              {% endfor %}
+
+              <!-- Tax Breakdown (CGST 9% / SGST 9%) -->
+              <tr style="border-top: 2px solid var(--border-color); font-weight: 500; background-color: #f8fafc;">
+                <td colspan="2"></td>
+                <td>Subtotal:</td>
+                <td style="text-align: right; font-family: monospace;">₹{{ selected_invoice.subtotal|floatformat:2 }}</td>
+              </tr>
+              <tr style="font-weight: 500; background-color: #f8fafc;">
+                <td colspan="2"></td>
+                <td>CGST (9.0%):</td>
+                <td style="text-align: right; font-family: monospace;">₹{{ selected_invoice.subtotal|multiply:0.09|floatformat:2 }}</td>
+              </tr>
+              <tr style="font-weight: 500; background-color: #f8fafc;">
+                <td colspan="2"></td>
+                <td>SGST (9.0%):</td>
+                <td style="text-align: right; font-family: monospace;">₹{{ selected_invoice.subtotal|multiply:0.09|floatformat:2 }}</td>
+              </tr>
+              <tr style="font-weight: 700; color: white; background-color: var(--primary-purple);">
+                <td colspan="2"></td>
+                <td style="font-weight: 700; color: white;">Grand Total Value:</td>
+                <td style="text-align: right; font-family: monospace; font-size: 1.1rem; color: white;">₹{{ selected_invoice.total_amount|floatformat:2 }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Footer Seal, QR Code, Signatures -->
+      <div style="display: grid; grid-template-columns: 100px 1fr 180px; gap: 20px; background-color: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; align-items: center;">
+        <div>
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=INV-NO:{{ selected_invoice.invoice_number }}|VAL:Rs.{{ selected_invoice.total_amount|floatformat:2 }}|GSTIN:{{ selected_invoice.purchase_order.quotation.vendor.gst_number }}|STATUS:{{ selected_invoice.status }}" 
+               alt="Scanable QR Code" style="width: 80px; height: 80px; border: 1px solid var(--border-color); background-color: white; padding: 3px; border-radius: 4px;">
+        </div>
+        <div>
+          <h4 style="font-size: 0.85rem; color: var(--text-dark); margin-bottom: 4px;">Compliance Declaration</h4>
+          <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+            This is a digitally verified invoice complying with GST corporate requirements. CGST and SGST calculated at 9.0% standard procurement rates.
+          </p>
+        </div>
+        <div style="border-left: 1px dashed var(--border-color); padding-left: 15px; text-align: center;">
+          <div style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 5px;">Secure Verification</div>
+          <div style="border: 2px solid #2ecc71; color: #2ecc71; font-size: 0.65rem; font-weight: 800; padding: 6px; border-radius: 4px; transform: rotate(2deg); text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2;">
+            DIGITALLY SIGNED<br/>
+            SECURE STAMP VERIFIED
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- PDF Download, Print, Email and Payment controls -->
+    <div style="border-top: 1px solid var(--border-color); padding: 20px 25px 25px 25px; margin-top: 0; display: flex; justify-content: space-between; align-items: center;" class="no-print">
+      <div>
+        {% if selected_invoice.status == 'Posted' and request.user.role == 'Officer' or request.user.role == 'Admin' or request.user.role == 'Manager' %}
+        <form method="POST" action="/invoices/" style="margin: 0;">
+          {% csrf_token %}
+          <input type="hidden" name="invoice_id" value="{{ selected_invoice.id }}">
+          <button type="submit" name="action" value="mark_as_paid" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 4px;">
+            <i data-lucide="check" style="width:14px; height:14px;"></i> Mark as Paid (Confirm Payment)
+          </button>
+        </form>
+        {% elif selected_invoice.status == 'Paid' %}
+        <span style="font-size: 0.85rem; color: #15803d; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+          <i data-lucide="check-circle" style="width:16px; height:16px;"></i> Payment Confirmed & Reconciled
+        </span>
+        {% endif %}
+      </div>
+      
+      <div style="display: flex; gap: 8px;">
+        <a href="/api/invoices/{{ selected_invoice.id }}/download_pdf/" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.75rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+          <i data-lucide="download" style="width: 14px; height: 14px;"></i> Download PDF
+        </a>
+        
+        <button onclick="window.print()" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+          <i data-lucide="printer" style="width: 14px; height: 14px;"></i> Print Invoice
+        </button>
+        
+        <form method="POST" action="/invoices/" style="margin: 0;">
+          {% csrf_token %}
+          <input type="hidden" name="invoice_id" value="{{ selected_invoice.id }}">
+          <button type="submit" name="action" value="email_invoice" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+            <i data-lucide="mail" style="width: 14px; height: 14px;"></i> Send by Email
+          </button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+  {% else %}
+  <div class="card" style="padding: 50px; text-align: center; color: var(--text-muted);">
+    <i data-lucide="file-minus" style="width: 48px; height: 48px; stroke-width: 1.5; color: var(--border-color); margin-bottom: 15px;"></i>
+    <h3>No Invoice Selected</h3>
+    <p style="font-size: 0.85rem; margin-top: 5px;">Select an invoice from the ledger to inspect line totals, view CGST/SGST taxes, download ReportLab PDF, or record payment.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Smooth scroll to selected Invoice details on page load if selected
+  window.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('selected_id')) {
+      const detailsAnchor = document.getElementById('invoice-details-anchor');
+      if (detailsAnchor) {
+        setTimeout(() => {
+          detailsAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 150);
+      }
+    }
+  });
+</script>
+{% endblock %}

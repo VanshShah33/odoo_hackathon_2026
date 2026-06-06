@@ -1,0 +1,118 @@
+{% extends 'procurement/base.html' %}
+{% load static %}
+
+{% block page_title %}Approvals{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 25px;">
+  <h1>Manager Approval Center</h1>
+  <p class="subtitle" style="margin-bottom: 0;">Review procurement requests, approve quotations, authorize purchase orders, or reject bids with remarks.</p>
+</div>
+
+<!-- Warning if not manager -->
+{% if request.user.role != 'Manager' and request.user.role != 'Admin' %}
+<div class="card" style="padding: 20px; background-color: #fffbeb; border: 1px solid #fef3c7; color: #b45309; margin-bottom: 25px; font-size: 0.85rem; display: flex; align-items: center; gap: 10px;">
+  <i data-lucide="info" style="width: 18px; height: 18px;"></i>
+  <span>
+    Your current active role is <strong>{{ request.user.role }}</strong>. While you can view this page, only a <strong>Manager</strong> or <strong>Admin</strong> has authorization to Approve or Reject requests. 
+    Use the <strong>Dev Mode Switcher</strong> in the top-right navbar to switch roles.
+  </span>
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom: 0;">
+  <h2 class="card-title">Approval Requests Ledger</h2>
+  <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: -10px; margin-bottom: 15px;">List of quotations pending authorization or previously processed.</p>
+  
+  <div class="table-container">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th style="width: 140px;">Request Ref</th>
+          <th>RFQ Reference</th>
+          <th>Vendor</th>
+          <th>Bid Amount</th>
+          <th>Delivery Speed</th>
+          <th>Status</th>
+          <th style="width: 380px;">Action / Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for app in approvals %}
+        <tr>
+          <td style="font-family: monospace; font-weight: 700;">APP-{{ app.id|stringformat:"04d" }}</td>
+          <td>
+            <div style="font-weight: 600;">{{ app.quotation.rfq.title }}</div>
+            <div style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">{{ app.quotation.rfq.rfq_number }}</div>
+          </td>
+          <td>
+            <span style="font-weight: 600; color: var(--text-dark);">{{ app.quotation.vendor.name }}</span>
+          </td>
+          <td style="font-weight: 700; color: var(--primary-purple);">₹{{ app.quotation.total_price|floatformat:2 }}</td>
+          <td>{{ app.quotation.delivery_timeline_days }} Days</td>
+          <td>
+            <span class="badge" style="font-size: 0.65rem;
+              {% if app.status == 'Pending' %}background-color: #fef3c7; color: #b45309;
+              {% elif app.status == 'Approved' %}background-color: #dcfce7; color: #15803d;
+              {% else %}background-color: #fee2e2; color: #b91c1c;{% endif %}">
+              {{ app.status }}
+            </span>
+          </td>
+          <td style="padding: 10px;">
+            {% if app.status == 'Pending' %}
+              {% if request.user.role == 'Manager' or request.user.role == 'Admin' %}
+              <form method="POST" action="/approvals/" style="display: flex; gap: 6px; align-items: center; margin: 0;">
+                {% csrf_token %}
+                <input type="hidden" name="approval_id" value="{{ app.id }}">
+                
+                <input type="text" name="remarks" placeholder="Add remarks..." class="form-control" style="padding: 6px 10px; font-size: 0.8rem; flex-grow: 1; min-width: 100px; height: 32px;">
+                
+                <button type="submit" name="action" value="approve" class="btn" style="background-color: #10b981; border: 1px solid #10b981; color: white; padding: 0 12px; font-size: 0.75rem; height: 32px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; cursor: pointer; border-radius: 4px; transition: background-color 0.2s;">
+                  <i data-lucide="check" style="width: 14px; height: 14px;"></i> Approve
+                </button>
+                <button type="submit" name="action" value="reject" class="btn" style="background-color: #ef4444; border: 1px solid #ef4444; color: white; padding: 0 12px; font-size: 0.75rem; height: 32px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; cursor: pointer; border-radius: 4px; transition: background-color 0.2s;">
+                  <i data-lucide="x" style="width: 14px; height: 14px;"></i> Reject
+                </button>
+              </form>
+              {% else %}
+              <span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic;">Requires Manager role</span>
+              {% endif %}
+            {% else %}
+              <div style="font-size: 0.8rem; color: var(--text-dark); background-color: #f8fafc; padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border-color);">
+                <strong>Remarks:</strong> {{ app.remarks|default:"No remarks entered." }}
+              </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px 20px;">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 15px; padding: 20px 0;">
+              <i data-lucide="inbox" style="width: 48px; height: 48px; stroke-width: 1.5; color: var(--border-color);"></i>
+              <h3 style="color: var(--text-dark); font-weight: 600; font-size: 1.1rem;">No Approval Requests Found</h3>
+              <p style="font-size: 0.85rem; max-width: 450px; margin-top: 5px; line-height: 1.5; color: var(--text-muted);">
+                There are currently no approval requests in the ledger. Normally, a <strong>Procurement Officer</strong> must shortlist a quotation and click "Generate Approval Request" on the RFQ Bids Comparison page.
+              </p>
+              
+              <div style="margin-top: 10px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+                <form method="POST" action="/approvals/" style="margin: 0;">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="generate_mock_approval">
+                  <button type="submit" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 8px;">
+                    <i data-lucide="sparkles" style="width: 16px; height: 16px;"></i> Auto-Generate Demo Request
+                  </button>
+                </form>
+                
+                <a href="/rfqs/" class="btn btn-outline" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                  <i data-lucide="arrow-right-circle" style="width: 16px; height: 16px;"></i> View Active RFQs
+                </a>
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

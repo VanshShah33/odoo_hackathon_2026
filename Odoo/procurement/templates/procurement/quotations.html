@@ -1,0 +1,274 @@
+{% extends 'procurement/base.html' %}
+{% load static %}
+{% load procurement_filters %}
+
+{% block page_title %}Quotations{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 25px;">
+  <h1>Supplier Bidding Portal</h1>
+  <p class="subtitle" style="margin-bottom: 0;">Submit competitive bids, specify line unit prices, and review historical procurement quotes.</p>
+</div>
+
+{% if not my_profile %}
+<div class="card" style="padding: 40px; text-align: center; border-color: #fca5a5; background-color: #fee2e2;">
+  <i data-lucide="alert-triangle" style="width: 48px; height: 48px; color: #b91c1c; margin-bottom: 15px;"></i>
+  <h3 style="color: #991b1b;">No Vendor Profile Linked</h3>
+  <p style="font-size: 0.9rem; color: #7f1d1d; margin-top: 5px; max-width: 500px; margin-left: auto; margin-right: auto;">
+    Your account is not registered as a Vendor or does not have an active Vendor Profile.
+    Please use the <strong>Dev Mode Switcher</strong> in the top-right navbar to switch to a Vendor role, or register a vendor profile.
+  </p>
+</div>
+{% else %}
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
+  <!-- Left Side: Active RFQ Invitations & Quotation Forms -->
+  <div>
+    <div class="card">
+      <h2 class="card-title" style="display: flex; align-items: center; gap: 8px;">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background-color:var(--secondary-teal);"></span>
+        Active Invitations to Bid
+      </h2>
+      
+      <div style="display: flex; flex-direction: column; gap: 15px;">
+        {% for rfq in rfqs %}
+        <div style="border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; background-color: #f8fafc; transition: all 0.2s;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+            <div>
+              <strong style="font-size: 0.95rem; color: var(--text-dark);">{{ rfq.title }}</strong>
+              <div style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">RFQ Ref: {{ rfq.rfq_number }}</div>
+            </div>
+            <span class="badge" style="background-color: var(--status-sent-bg); color: var(--status-sent-text); font-size: 0.65rem;">INVITED</span>
+          </div>
+          
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">{{ rfq.description|truncatewords:20 }}</p>
+          
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+            <span style="color: #ef4444; font-weight: 600;">Deadline: {{ rfq.deadline|date:"Y-m-d" }}</span>
+            <button
+              class="btn btn-primary"
+              style="padding: 6px 14px; font-size: 0.8rem;"
+              data-rfq-id="{{ rfq.id }}"
+              data-rfq-number="{{ rfq.rfq_number }}"
+              data-rfq-title="{{ rfq.title|escapejs }}"
+              data-rfq-items='{{ rfq.items|to_json }}'
+              onclick="openBidForm(this)">
+              Submit Quote Bid
+            </button>
+          </div>
+        </div>
+        {% empty %}
+        <div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+          No active RFQ invitations at this time.
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    
+    <!-- Dynamic Bid Submission Form Card -->
+    <div class="card" id="bid-form-card" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 20px;">
+        <h2 class="card-title" id="bid-form-title" style="margin-bottom: 0;">Submit Quote</h2>
+        <button onclick="closeBidForm()" style="background: transparent; border: none; font-size: 1.25rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+      </div>
+
+      <form method="POST" action="/quotations/" oninput="calculateBidTotal()">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="submit_quote">
+        <input type="hidden" name="rfq_id" id="bid-rfq-id">
+
+        <!-- Line item inputs -->
+        <h3 style="font-size: 0.9rem; margin-bottom: 10px; color: var(--text-dark);">Enter Unit Prices</h3>
+        <div class="table-container" style="margin-bottom: 20px; border-color: #cbd5e1;">
+          <table class="erp-table">
+            <thead>
+              <tr style="background-color: #f1f5f9;">
+                <th>Product & Spec</th>
+                <th style="width: 80px;">Qty</th>
+                <th style="width: 140px;">Unit Price (₹) *</th>
+                <th style="width: 120px; text-align: right;">Line Total</th>
+              </tr>
+            </thead>
+            <tbody id="bid-items-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Delivery Timeline (Days) *</label>
+            <input type="number" name="delivery_timeline_days" required min="1" max="60" value="5" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Vendor Profile</label>
+            <input type="text" readonly value="{{ my_profile.name }}" class="form-control" style="background-color: #f1f5f9; font-weight: 600;">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Terms & Conditions Remarks</label>
+          <textarea name="terms" rows="2" placeholder="e.g. 1-year product warranty included. Standard delivery terms." class="form-control"></textarea>
+        </div>
+
+        <!-- Totals breakdown -->
+        <div style="background-color: #f8fafc; padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted);">
+            <span>Subtotal:</span>
+            <span id="bid-subtotal-display">₹0.00</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-muted);">
+            <span>GST Tax (18%):</span>
+            <span id="bid-tax-display">₹0.00</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.95rem; font-weight: 700; color: var(--primary-purple); border-top: 1px solid var(--border-color); padding-top: 8px;">
+            <span>Grand Total Quote:</span>
+            <span id="bid-total-display">₹0.00</span>
+          </div>
+        </div>
+
+        <!-- Hidden math values to submit -->
+        <input type="hidden" name="subtotal" id="subtotal-input" value="0">
+        <input type="hidden" name="tax_amount" id="tax-input" value="0">
+
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <button type="button" onclick="closeBidForm()" class="btn btn-outline">Cancel</button>
+          <button type="submit" class="btn btn-primary">Submit Quotation Bid</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Right Side: Historical Quotation Ledger -->
+  <div>
+    <div class="card" style="margin-bottom: 0;">
+      <h2 class="card-title">Historical Bid Log</h2>
+      <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: -10px; margin-bottom: 15px;">List of quotations previously submitted for evaluation.</p>
+      
+      <div class="table-container">
+        <table class="erp-table">
+          <thead>
+            <tr>
+              <th>RFQ Ref</th>
+              <th>Date</th>
+              <th>Total Value</th>
+              <th>Delivery</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for q in my_quotes %}
+            <tr>
+              <td style="font-family: monospace; font-weight: 600;">{{ q.rfq.rfq_number }}</td>
+              <td>{{ q.created_at|date:"Y-m-d" }}</td>
+              <td style="font-weight: 700; color: var(--primary-purple);">₹{{ q.total_price|floatformat:2 }}</td>
+              <td>{{ q.delivery_timeline_days }} Days</td>
+              <td>
+                <span class="badge" style="font-size: 0.65rem;
+                  {% if q.status == 'Submitted' %}background-color: #e0f2fe; color: #0369a1;
+                  {% elif q.status == 'Shortlisted' %}background-color: #fef3c7; color: #b45309;
+                  {% elif q.status == 'Approved' %}background-color: #dcfce7; color: #15803d;
+                  {% else %}background-color: #fee2e2; color: #b91c1c;{% endif %}">
+                  {{ q.status }}
+                </span>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 15px;">No previous quotations submitted.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  let activeRFQItems = [];
+
+  function openBidForm(btn) {
+    const rfqId     = btn.dataset.rfqId;
+    const rfqNumber = btn.dataset.rfqNumber;
+    const rfqTitle  = btn.dataset.rfqTitle;
+    let items;
+    try {
+      items = JSON.parse(btn.dataset.rfqItems);
+    } catch(e) {
+      console.error('Failed to parse RFQ items JSON:', e, btn.dataset.rfqItems);
+      alert('Error loading RFQ items. Please refresh the page and try again.');
+      return;
+    }
+
+    document.getElementById('bid-rfq-id').value = rfqId;
+    document.getElementById('bid-form-title').textContent = `Submit Quote: ${rfqNumber} — ${rfqTitle}`;
+
+    activeRFQItems = items;
+    const tbody = document.getElementById('bid-items-body');
+    tbody.innerHTML = '';
+    
+    items.forEach((item, idx) => {
+      const defaultPrice = item.expected_price || 0;
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-size:0.82rem; font-weight:600; padding: 10px 16px;">
+          ${item.name}
+          <div style="font-size:0.7rem; font-weight:normal; color:var(--text-muted); margin-top:2px;">${item.spec || ''}</div>
+        </td>
+        <td style="font-size:0.82rem; font-family:monospace; text-align:center;" id="qty-${idx}">${item.qty}</td>
+        <td style="padding: 8px 12px;">
+          <input type="number" step="0.01" required min="0.01"
+                 name="unit_price_${idx}"
+                 value="${defaultPrice}"
+                 id="price-${idx}"
+                 oninput="calculateBidTotal()"
+                 class="form-control"
+                 style="padding:5px 8px; font-size:0.82rem; text-align:right; max-width:130px;">
+        </td>
+        <td style="text-align:right; font-family:monospace; font-size:0.82rem; font-weight:600; padding-right:16px;" id="total-${idx}">
+          ₹${(item.qty * defaultPrice).toFixed(2)}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('bid-form-card').style.display = 'block';
+    document.getElementById('bid-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    calculateBidTotal();
+  }
+
+  function closeBidForm() {
+    document.getElementById('bid-form-card').style.display = 'none';
+  }
+
+  function calculateBidTotal() {
+    let subtotal = 0;
+    activeRFQItems.forEach((item, idx) => {
+      const priceInput = document.getElementById(`price-${idx}`);
+      if (priceInput) {
+        const price = parseFloat(priceInput.value) || 0;
+        const qty = parseInt(document.getElementById(`qty-${idx}`).textContent) || item.qty;
+        const lineTotal = qty * price;
+        document.getElementById(`total-${idx}`).textContent = `₹${lineTotal.toFixed(2)}`;
+        subtotal += lineTotal;
+      }
+    });
+
+    const tax = subtotal * 0.18;
+    const total = subtotal + tax;
+
+    document.getElementById('bid-subtotal-display').textContent = `₹${subtotal.toFixed(2)}`;
+    document.getElementById('bid-tax-display').textContent    = `₹${tax.toFixed(2)}`;
+    document.getElementById('bid-total-display').textContent  = `₹${total.toFixed(2)}`;
+
+    document.getElementById('subtotal-input').value = subtotal.toFixed(2);
+    document.getElementById('tax-input').value       = tax.toFixed(2);
+  }
+</script>
+{% endblock %}
+

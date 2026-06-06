@@ -1,0 +1,304 @@
+{% extends 'procurement/base.html' %}
+{% load static %}
+{% load procurement_filters %}
+
+{% block page_title %}Purchase Orders{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+  <div>
+    <h1>Purchase Orders (PO)</h1>
+    <p class="subtitle" style="margin-bottom: 0;">Dispatch official purchase orders, track logistics milestones, and generate billing invoices.</p>
+  </div>
+</div>
+
+<!-- Filters -->
+<form method="GET" action="/purchase-orders/" class="filter-panel" style="background-color: white; padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 25px;">
+  <div class="search-input-wrapper" style="max-width: 300px;">
+    <i data-lucide="search" class="search-icon" style="width: 16px; height: 16px;"></i>
+    <input type="text" name="search" value="{{ search }}" placeholder="Search PO number..." class="form-control">
+  </div>
+  
+  <div class="filter-actions" style="display: flex; gap: 12px; align-items: center;">
+    <div>
+      <select name="status" class="form-control" style="padding: 8px 12px; width: 160px;" onchange="this.form.submit()">
+        <option value="All" {% if status_filter == 'All' %}selected{% endif %}>All Statuses</option>
+        <option value="Open" {% if status_filter == 'Open' %}selected{% endif %}>Open</option>
+        <option value="Invoiced" {% if status_filter == 'Invoiced' %}selected{% endif %}>Invoiced</option>
+        <option value="Closed" {% if status_filter == 'Closed' %}selected{% endif %}>Closed</option>
+      </select>
+    </div>
+
+    <button type="submit" class="btn btn-outline" style="padding: 8px 16px;">
+      Filter
+    </button>
+    
+    {% if search or status_filter != 'All' %}
+    <a href="/purchase-orders/" class="btn btn-outline" style="text-decoration: none; padding: 8px 16px;">Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Full-Width PO Directory Table -->
+<div class="card" style="margin-bottom: 25px; width: 100%; padding: 0; overflow: hidden;">
+  <div style="padding: 15px 20px; border-bottom: 1px solid var(--border-color); background-color: #f8fafc; display: flex; justify-content: space-between; align-items: center;">
+    <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-dark);">Purchase Orders Ledger ({{ pos|length }} Records)</span>
+  </div>
+  
+  <div class="table-container">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>PO Number</th>
+          <th>Vendor</th>
+          <th>Total Amount</th>
+          <th>Issued Date</th>
+          <th>Delivery Status</th>
+          <th style="text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for po in pos %}
+        <tr style="cursor: pointer; background-color: {% if selected_po.id == po.id %}#f1f5f9{% else %}transparent{% endif %}; transition: background-color 0.15s;" onclick="window.location.href='/purchase-orders/?selected_id={{ po.id }}&search={{ search }}&status={{ status_filter }}#po-details-anchor'">
+          <td style="font-weight: 700; font-family: monospace; color: var(--primary-purple);">{{ po.po_number }}</td>
+          <td style="font-weight: 600; color: var(--text-dark);">{{ po.quotation.vendor.name }}</td>
+          <td style="font-weight: 700; color: var(--text-dark);">₹{{ po.quotation.total_price|floatformat:2 }}</td>
+          <td style="color: var(--text-muted); font-size: 0.8rem;">{{ po.created_at|date:"Y-m-d" }}</td>
+          <td>
+            <span class="badge" style="font-size: 0.65rem; background-color: #fae8ff; color: #86198f; font-weight: 600;">
+              {{ po.timeline_status }}
+            </span>
+          </td>
+          <td style="text-align: right;" onclick="event.stopPropagation();">
+            <a href="/purchase-orders/?selected_id={{ po.id }}&search={{ search }}&status={{ status_filter }}#po-details-anchor" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+              <i data-lucide="eye" style="width: 12px; height: 12px;"></i> View Details
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;">
+            No Purchase Orders match your filters.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Anchor for smooth scrolling to details -->
+<div id="po-details-anchor" style="padding-top: 5px;"></div>
+
+<!-- Full-Width Selected PO Details (Below) -->
+<div style="width: 100%;">
+  {% if selected_po %}
+  <div class="card" style="padding-top: 0; padding-left: 0; padding-right: 0; border-top: 4px solid var(--primary-purple); box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+    
+    <!-- Odoo timeline tracking stepper -->
+    <div class="document-status-bar" style="margin-left: 0; margin-right: 0; margin-top: 0; padding: 12px 25px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
+      <span style="margin-right: auto; font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">PO Status Tracker: <span style="font-family: monospace; color: var(--text-dark);">{{ selected_po.po_number }}</span></span>
+      <span class="status-step {% if selected_po.timeline_status == 'Confirmed' %}active{% else %}completed{% endif %}">Confirmed</span>
+      <span style="color:#cbd5e1;">&rarr;</span>
+      <span class="status-step {% if selected_po.timeline_status == 'Shipped' %}active{% elif selected_po.timeline_status == 'Received' or selected_po.timeline_status == 'Invoiced' %}completed{% endif %}">Shipped</span>
+      <span style="color:#cbd5e1;">&rarr;</span>
+      <span class="status-step {% if selected_po.timeline_status == 'Received' %}active{% elif selected_po.timeline_status == 'Invoiced' %}completed{% endif %}">Received</span>
+      <span style="color:#cbd5e1;">&rarr;</span>
+      <span class="status-step {% if selected_po.timeline_status == 'Invoiced' %}active{% endif %}">Invoiced</span>
+    </div>
+
+    <!-- PO Sheet Printable Area -->
+    <div id="printable-po-area" style="position: relative; padding: 25px;">
+      <!-- Watermark/Invoiced Badge -->
+      {% if selected_po.timeline_status == 'Invoiced' %}
+      <div style="position: absolute; top: 120px; right: 50px; border: 4px solid #86198f; color: #86198f; font-size: 2.2rem; font-weight: 900; padding: 10px 25px; border-radius: 8px; transform: rotate(15deg); opacity: 0.15; pointer-events: none; text-transform: uppercase;">
+        INVOICED
+      </div>
+      {% endif %}
+
+      <!-- PO Header Logo & Meta -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--primary-purple); padding-bottom: 20px; margin-bottom: 25px;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="background-color: var(--primary-purple); color: white; width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem;">VB</div>
+            <span style="font-size: 1.3rem; font-weight: 800; color: var(--text-dark);">VendorBridge ERP</span>
+          </div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px; font-weight: 500;">Official Purchase Order</p>
+        </div>
+        
+        <div style="text-align: right;">
+          <h2 style="font-size: 1.4rem; color: var(--text-dark); font-family: monospace; font-weight: 800; margin: 0;">PURCHASE ORDER</h2>
+          <div style="font-family: monospace; font-size: 0.95rem; font-weight: 700; color: var(--primary-purple); margin-top: 3px;">{{ selected_po.po_number }}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Date: {{ selected_po.created_at|date:"Y-m-d" }}</div>
+        </div>
+      </div>
+
+      <!-- Vendor & Billing Info -->
+      <div class="grid-2" style="margin-bottom: 30px;">
+        <div>
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 6px; letter-spacing: 0.5px;">Supplier / Vendor</div>
+          <strong style="font-size: 1rem; color: var(--text-dark);">{{ selected_po.quotation.vendor.name }}</strong>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
+            GSTIN: <strong style="font-family: monospace; color: var(--text-dark);">{{ selected_po.quotation.vendor.gst_number }}</strong><br/>
+            Contact: {{ selected_po.quotation.vendor.contact_email }} | {{ selected_po.quotation.vendor.phone }}<br/>
+            Address: {{ selected_po.quotation.vendor.address }}
+          </div>
+        </div>
+        
+        <div style="text-align: right;">
+          <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; margin-bottom: 6px; letter-spacing: 0.5px;">Ship To / Bill To</div>
+          <strong style="font-size: 1rem; color: var(--text-dark);">VendorBridge Corporate Headquarters</strong>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 5px; line-height: 1.4;">
+            RFQ Reference: {{ selected_po.quotation.rfq.rfq_number }}<br/>
+            Expected Delivery: {{ selected_po.expected_delivery_date|date:"Y-m-d"|default:"Within 7 Days" }}<br/>
+            Vendor Compliance Risk: <strong style="color: {% if selected_po.risk_score > 30 %}#b91c1c{% else %}#15803d{% endif %};">{{ selected_po.risk_score }}% (Score)</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Items Table -->
+      <div style="margin-bottom: 30px;">
+        <div class="table-container">
+          <table class="erp-table">
+            <thead>
+              <tr style="background-color: var(--primary-purple); color: white;">
+                <th style="color: white;">Description</th>
+                <th style="color: white; width: 80px;">Qty</th>
+                <th style="color: white; width: 140px;">Unit Price (₹)</th>
+                <th style="color: white; text-align: right; width: 140px;">Total Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in selected_po.quotation.items_quotation %}
+              <tr>
+                <td style="font-weight: 600;">
+                  {{ item.name }}
+                  <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">{{ item.spec }}</div>
+                </td>
+                <td>{{ item.qty }}</td>
+                <td>₹{{ item.unit_price|floatformat:2 }}</td>
+                <td style="text-align: right; font-family: monospace;">₹{{ item.qty|multiply:item.unit_price|floatformat:2 }}</td>
+              </tr>
+              {% endfor %}
+
+              <!-- Subtotals -->
+              <tr style="border-top: 2px solid var(--border-color); font-weight: 500; background-color: #f8fafc;">
+                <td colspan="2"></td>
+                <td>Subtotal:</td>
+                <td style="text-align: right; font-family: monospace;">₹{{ selected_po.quotation.subtotal|floatformat:2 }}</td>
+              </tr>
+              <tr style="font-weight: 500; background-color: #f8fafc;">
+                <td colspan="2"></td>
+                <td>GST Tax (18%):</td>
+                <td style="text-align: right; font-family: monospace;">₹{{ selected_po.quotation.tax_amount|floatformat:2 }}</td>
+              </tr>
+              <tr style="font-weight: 700; color: white; background-color: var(--primary-purple);">
+                <td colspan="2"></td>
+                <td style="font-weight: 700; color: white;">Grand Total PO:</td>
+                <td style="text-align: right; font-family: monospace; font-size: 1.1rem; color: white;">₹{{ selected_po.quotation.total_price|floatformat:2 }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- QR Code, Terms & Seal -->
+      <div style="display: grid; grid-template-columns: 100px 1fr 180px; gap: 20px; background-color: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; align-items: center;">
+        <div>
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=PO-NO:{{ selected_po.po_number }}|VAL:Rs.{{ selected_po.quotation.total_price|floatformat:2 }}|STATUS:{{ selected_po.timeline_status }}" 
+               alt="Scanable QR Code" style="width: 80px; height: 80px; border: 1px solid var(--border-color); background-color: white; padding: 3px; border-radius: 4px;">
+        </div>
+        <div>
+          <h4 style="font-size: 0.85rem; color: var(--text-dark); margin-bottom: 4px;">Terms & Conditions</h4>
+          <p style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.4;">
+            {{ selected_po.quotation.notes|default:"Official VendorBridge ERP issued document. Subject to standard corporate procurement terms and digital authorization guidelines." }}
+          </p>
+        </div>
+        <div style="border-left: 1px dashed var(--border-color); padding-left: 15px; text-align: center;">
+          <div style="font-size: 0.65rem; text-transform: uppercase; color: var(--text-muted); font-weight: 600; margin-bottom: 8px;">Authorized Digital Seal</div>
+          <div style="border: 2px solid var(--primary-purple); color: var(--primary-purple); font-size: 0.7rem; font-weight: 800; padding: 6px; border-radius: 4px; transform: rotate(-5deg); text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.2;">
+            VB ERP SEALED<br/>
+            <span style="font-size: 0.55rem; font-weight: normal; font-family: monospace;">AUTH ID: {{ selected_po.id|stringformat:"04d" }}</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- PDF Download, Action Controls -->
+    <div style="border-top: 1px solid var(--border-color); padding: 20px 25px 25px 25px; margin-top: 0; display: flex; justify-content: space-between; align-items: center;" class="no-print">
+      <div>
+        {% if selected_po.status != 'Closed' %}
+        <form method="POST" action="/purchase-orders/" style="margin: 0; display: flex; gap: 10px;">
+          {% csrf_token %}
+          <input type="hidden" name="po_id" value="{{ selected_po.id }}">
+          
+          {% if selected_po.timeline_status != 'Invoiced' %}
+          <button type="submit" name="action" value="track_delivery" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 4px;">
+            <i data-lucide="truck" style="width: 14px; height: 14px;"></i> Advance Timeline Milestones
+          </button>
+          {% endif %}
+          
+          {% if selected_po.timeline_status == 'Received' or selected_po.timeline_status == 'Invoiced' %}
+          <button type="submit" name="action" value="generate_invoice" class="btn btn-primary" style="display: inline-flex; align-items: center; gap: 4px;">
+            <i data-lucide="file-plus" style="width: 14px; height: 14px;"></i> Generate Billing Invoice
+          </button>
+          {% endif %}
+
+          <button type="submit" name="action" value="close_po" class="btn btn-outline" style="border-color: red; color: red;">
+            Close Order (Close PO)
+          </button>
+        </form>
+        {% else %}
+        <span style="font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+          <i data-lucide="lock" style="width: 16px; height: 16px;"></i> Purchase Order is archived and closed.
+        </span>
+        {% endif %}
+      </div>
+      
+      <div style="display: flex; gap: 8px;">
+        <a href="/api/pos/{{ selected_po.id }}/download_pdf/" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.75rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+          <i data-lucide="download" style="width: 14px; height: 14px;"></i> Download PDF
+        </a>
+        
+        <button onclick="window.print()" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+          <i data-lucide="printer" style="width: 14px; height: 14px;"></i> Print PO
+        </button>
+        
+        <form method="POST" action="/purchase-orders/" style="margin: 0;">
+          {% csrf_token %}
+          <input type="hidden" name="po_id" value="{{ selected_po.id }}">
+          <button type="submit" name="action" value="email_po" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px;">
+            <i data-lucide="mail" style="width: 14px; height: 14px;"></i> Send by Email
+          </button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+  {% else %}
+  <div class="card" style="padding: 50px; text-align: center; color: var(--text-muted);">
+    <i data-lucide="file-check" style="width: 48px; height: 48px; stroke-width: 1.5; color: var(--border-color); margin-bottom: 15px;"></i>
+    <h3>No Purchase Order Selected</h3>
+    <p style="font-size: 0.85rem; margin-top: 5px;">Select a PO from the directory ledger to examine items specs, track delivery stepper, download ReportLab PDF, or generate invoices.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Smooth scroll to selected PO details on page load if selected
+  window.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('selected_id')) {
+      const detailsAnchor = document.getElementById('po-details-anchor');
+      if (detailsAnchor) {
+        setTimeout(() => {
+          detailsAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 150);
+      }
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,317 @@
+{% extends 'procurement/base.html' %}
+{% load static %}
+
+{% block page_title %}Settings{% endblock %}
+
+{% block extra_css %}
+<style>
+  .settings-container {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 30px;
+    align-items: start;
+  }
+  .settings-nav-card {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .settings-nav-item {
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .settings-nav-item:hover {
+    background-color: #f8fafc;
+    color: var(--text-dark);
+  }
+  .settings-nav-item.active {
+    background-color: rgba(113, 75, 103, 0.08);
+    color: var(--primary-purple);
+  }
+  .settings-panel {
+    display: none;
+  }
+  .settings-panel.active {
+    display: block;
+  }
+  .theme-card {
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px 15px;
+    cursor: pointer;
+    text-align: center;
+    background-color: var(--card-bg);
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  }
+  .theme-card:hover {
+    border-color: var(--text-muted);
+    transform: translateY(-2px);
+  }
+  .theme-card.active {
+    border-color: var(--primary-purple);
+    background-color: rgba(113, 75, 103, 0.03);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header" style="margin-bottom: 25px;">
+  <h1>System Settings & Preferences</h1>
+  <p class="subtitle" style="margin-bottom: 0;">Manage your user account profile, modify system credentials, and customize application layout styles.</p>
+</div>
+
+{% if error %}
+<div style="background-color: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px 16px; border-radius: 6px; margin-bottom: 25px; font-size: 0.85rem;">
+  <strong>Error:</strong> {{ error }}
+</div>
+{% endif %}
+
+{% if message %}
+<div style="background-color: #dcfce7; border: 1px solid #bbf7d0; color: #166534; padding: 12px 16px; border-radius: 6px; margin-bottom: 25px; font-size: 0.85rem;">
+  <strong>Success:</strong> {{ message }}
+</div>
+{% endif %}
+
+<div class="settings-container">
+  
+  <!-- Left Side Tab Navs -->
+  <div class="settings-nav-card no-print">
+    <div class="settings-nav-item active" onclick="switchPanel('profile', this)">
+      <i data-lucide="user" style="width: 16px; height: 16px;"></i>
+      Profile Info
+    </div>
+    <div class="settings-nav-item" onclick="switchPanel('security', this)">
+      <i data-lucide="lock" style="width: 16px; height: 16px;"></i>
+      Account Security
+    </div>
+    <div class="settings-nav-item" onclick="switchPanel('appearance', this)">
+      <i data-lucide="palette" style="width: 16px; height: 16px;"></i>
+      Appearance (Theme)
+    </div>
+  </div>
+
+  <!-- Right Side Form Cards -->
+  <div style="flex-grow: 1;">
+    
+    <!-- PANEL 1: Profile Settings -->
+    <div class="settings-panel active" id="panel-profile">
+      <div class="card" style="margin-bottom: 0;">
+        <h2 class="card-title" style="border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 20px;">
+          Update Profile Information
+        </h2>
+        <form method="POST" action="/settings/">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update_profile">
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">First Name</label>
+              <input type="text" name="first_name" required value="{{ request.user.first_name }}" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Last Name</label>
+              <input type="text" name="last_name" required value="{{ request.user.last_name }}" class="form-control">
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Email Address (Username)</label>
+            <input type="email" name="email" required value="{{ request.user.email }}" class="form-control">
+          </div>
+
+          <div class="form-row" style="margin-top: 10px;">
+            <div class="form-group">
+              <label class="form-label">System Role Access</label>
+              <input type="text" readonly value="{{ request.user.role }}" class="form-control" style="background-color: #f1f5f9; font-weight: 600; color: #475569 !important;">
+              <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 4px;">Role credentials can only be reassigned by system administrators.</small>
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+            <button type="submit" class="btn btn-primary">Save Profile Details</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- PANEL 2: Password Change -->
+    <div class="settings-panel" id="panel-security">
+      <div class="card" style="margin-bottom: 0;">
+        <h2 class="card-title" style="border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 20px;">
+          Change Account Password
+        </h2>
+        <form method="POST" action="/settings/">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="change_password">
+          
+          <div class="form-group">
+            <label class="form-label">Current Password *</label>
+            <input type="password" name="current_password" required placeholder="••••••••" class="form-control">
+          </div>
+          
+          <div class="form-row" style="margin-top: 10px;">
+            <div class="form-group">
+              <label class="form-label">New Password *</label>
+              <input type="password" name="new_password" required placeholder="Minimum 6 characters" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Confirm New Password *</label>
+              <input type="password" name="confirm_password" required placeholder="Re-enter password" class="form-control">
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; margin-top: 25px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+            <button type="submit" class="btn btn-primary">Update Password</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- PANEL 3: Appearance Preferences (Theme Switcher) -->
+    <div class="settings-panel" id="panel-appearance">
+      <div class="card" style="margin-bottom: 0;">
+        <h2 class="card-title" style="border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 20px;">
+          Theme Appearance Preferences
+        </h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Select your preferred workspace visual theme. Selecting any layout adjusts the application coloring immediately.</p>
+        
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
+          <!-- Purple Theme -->
+          <div class="theme-card" id="theme-card-purple" onclick="selectTheme('purple')">
+            <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #714B67; margin: 0 auto 12px auto; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"></div>
+            <strong style="font-size: 0.85rem; display: block; margin-bottom: 4px; color: var(--text-dark);">Odoo Purple</strong>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Corporate Default</span>
+          </div>
+
+          <!-- Teal Theme -->
+          <div class="theme-card" id="theme-card-teal" onclick="selectTheme('teal')">
+            <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #00A09D; margin: 0 auto 12px auto; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"></div>
+            <strong style="font-size: 0.85rem; display: block; margin-bottom: 4px; color: var(--text-dark);">Odoo Teal</strong>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Modern Mint</span>
+          </div>
+
+          <!-- Forest Green Theme -->
+          <div class="theme-card" id="theme-card-green" onclick="selectTheme('green')">
+            <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #0f766e; margin: 0 auto 12px auto; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"></div>
+            <strong style="font-size: 0.85rem; display: block; margin-bottom: 4px; color: var(--text-dark);">Forest Green</strong>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Organic Emerald</span>
+          </div>
+
+          <!-- Dark Slate Mode -->
+          <div class="theme-card" id="theme-card-dark" onclick="selectTheme('dark')">
+            <div style="width: 48px; height: 48px; border-radius: 50%; background-color: #0f172a; margin: 0 auto 12px auto; border: 3px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"></div>
+            <strong style="font-size: 0.85rem; display: block; margin-bottom: 4px; color: var(--text-dark);">Sleek Dark</strong>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">High Contrast Slate</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function switchPanel(panelId, element) {
+    // Hide all panels
+    document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
+    // Show selected panel
+    document.getElementById(`panel-${panelId}`).classList.add('active');
+    
+    // Reset active nav item
+    document.querySelectorAll('.settings-nav-item').forEach(nav => nav.classList.remove('active'));
+    // Highlight clicked nav item
+    element.classList.add('active');
+  }
+
+  function selectTheme(themeName) {
+    localStorage.setItem('erp_theme', themeName);
+    
+    // Instantly apply CSS variables in current DOM
+    const root = document.documentElement;
+    
+    // Reset variables first to defaults
+    root.style.removeProperty('--bg-light');
+    root.style.removeProperty('--card-bg');
+    root.style.removeProperty('--text-dark');
+    root.style.removeProperty('--text-muted');
+    root.style.removeProperty('--border-color');
+    root.style.removeProperty('--sidebar-bg');
+    root.style.removeProperty('--primary-purple');
+    root.style.removeProperty('--primary-purple-hover');
+    root.style.removeProperty('--sidebar-active');
+    root.style.removeProperty('--secondary-teal');
+    root.style.removeProperty('--secondary-teal-hover');
+    
+    if (themeName === 'teal') {
+      root.style.setProperty('--primary-purple', '#00A09D');
+      root.style.setProperty('--primary-purple-hover', '#008785');
+      root.style.setProperty('--sidebar-active', '#00A09D');
+      root.style.setProperty('--secondary-teal', '#714B67');
+      root.style.setProperty('--secondary-teal-hover', '#5c3c54');
+    } else if (themeName === 'green') {
+      root.style.setProperty('--primary-purple', '#0f766e');
+      root.style.setProperty('--primary-purple-hover', '#115e59');
+      root.style.setProperty('--sidebar-active', '#0f766e');
+      root.style.setProperty('--secondary-teal', '#0d9488');
+      root.style.setProperty('--secondary-teal-hover', '#0f766e');
+    } else if (themeName === 'dark') {
+      root.style.setProperty('--bg-light', '#0f172a');
+      root.style.setProperty('--card-bg', '#1e293b');
+      root.style.setProperty('--text-dark', '#f8fafc');
+      root.style.setProperty('--text-muted', '#94a3b8');
+      root.style.setProperty('--border-color', '#334155');
+      root.style.setProperty('--sidebar-bg', '#0f172a');
+      root.style.setProperty('--primary-purple', '#c084fc');
+      root.style.setProperty('--primary-purple-hover', '#a855f7');
+      root.style.setProperty('--secondary-teal', '#2dd4bf');
+      root.style.setProperty('--secondary-teal-hover', '#14b8a6');
+    }
+    
+    // Highlight active theme option visually
+    document.querySelectorAll('.theme-card').forEach(card => {
+      card.classList.remove('active');
+    });
+    document.getElementById(`theme-card-${themeName}`).classList.add('active');
+    
+    // Show alert toast
+    if (typeof showToast === 'function') {
+      showToast(`Visual Theme set to ${themeName.toUpperCase()} successfully!`);
+    }
+  }
+
+  // Highlight active theme option on page load
+  document.addEventListener('DOMContentLoaded', () => {
+    const currentTheme = localStorage.getItem('erp_theme') || 'purple';
+    const activeCard = document.getElementById(`theme-card-${currentTheme}`);
+    if (activeCard) {
+      activeCard.classList.add('active');
+    }
+    
+    // If returning from a post redirect, check hash to switch panel if needed
+    const hash = window.location.hash;
+    if (hash === '#security') {
+      const securityNav = document.querySelectorAll('.settings-nav-item')[1];
+      if (securityNav) switchPanel('security', securityNav);
+    } else if (hash === '#appearance') {
+      const appNav = document.querySelectorAll('.settings-nav-item')[2];
+      if (appNav) switchPanel('appearance', appNav);
+    }
+  });
+</script>
+{% endblock %}

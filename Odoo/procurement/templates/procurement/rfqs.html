@@ -1,0 +1,438 @@
+{% extends 'procurement/base.html' %}
+{% load static %}
+{% load procurement_filters %}
+
+{% block page_title %}RFQ's{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+  <div>
+    <h1>Requests for Quotation (RFQs)</h1>
+    <p class="subtitle" style="margin-bottom: 0;">Create and publish RFQs, manage supplier assignments, and receive competitive bids.</p>
+  </div>
+  {% if request.user.role == 'Officer' or request.user.role == 'Admin' %}
+  <button onclick="toggleRFQModal(true)" class="btn btn-primary">
+    <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i> Create RFQ
+  </button>
+  {% endif %}
+</div>
+
+{% if error %}
+<div style="background-color: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 0.85rem;">
+  <strong>Error:</strong> {{ error }}
+</div>
+{% endif %}
+
+<!-- Filters -->
+<form method="GET" action="/rfqs/" class="filter-panel" style="background-color: white; padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 25px;">
+  <div class="search-input-wrapper" style="max-width: 300px;">
+    <i data-lucide="search" class="search-icon" style="width: 16px; height: 16px;"></i>
+    <input type="text" name="search" value="{{ search }}" placeholder="Search RFQ number, title..." class="form-control">
+  </div>
+  
+  <div class="filter-actions" style="display: flex; gap: 12px; align-items: center;">
+    <div>
+      <select name="status" class="form-control" style="padding: 8px 12px; width: 160px;" onchange="this.form.submit()">
+        <option value="All" {% if status_filter == 'All' %}selected{% endif %}>All Statuses</option>
+        <option value="Draft" {% if status_filter == 'Draft' %}selected{% endif %}>Draft</option>
+        <option value="Sent" {% if status_filter == 'Sent' %}selected{% endif %}>Sent (Bids Open)</option>
+        <option value="Received" {% if status_filter == 'Received' %}selected{% endif %}>Received (Bids Closed)</option>
+        <option value="Compared" {% if status_filter == 'Compared' %}selected{% endif %}>Compared (Shortlisted)</option>
+        <option value="Approved" {% if status_filter == 'Approved' %}selected{% endif %}>Approved (Ready for PO)</option>
+        <option value="PO_Generated" {% if status_filter == 'PO_Generated' %}selected{% endif %}>PO Generated</option>
+      </select>
+    </div>
+
+    <button type="submit" class="btn btn-outline" style="padding: 8px 16px;">
+      Filter
+    </button>
+    
+    {% if search or status_filter != 'All' %}
+    <a href="/rfqs/" class="btn btn-outline" style="text-decoration: none; padding: 8px 16px;">Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Full-Width RFQ Directory Table -->
+<div class="card" style="margin-bottom: 25px; width: 100%; padding: 0; overflow: hidden;">
+  <div style="padding: 15px 20px; border-bottom: 1px solid var(--border-color); background-color: #f8fafc; display: flex; justify-content: space-between; align-items: center;">
+    <span style="font-weight: 700; font-size: 0.88rem; color: var(--text-dark);">Requests for Quotations Ledger ({{ rfqs|length }} Records)</span>
+  </div>
+  
+  <div class="table-container">
+    <table class="erp-table">
+      <thead>
+        <tr>
+          <th>RFQ Number</th>
+          <th>Title</th>
+          <th>Deadline</th>
+          <th>Created By</th>
+          <th>Status</th>
+          <th style="text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rfqs %}
+        <tr style="cursor: pointer; background-color: {% if selected_rfq.id == r.id %}#f1f5f9{% else %}transparent{% endif %}; transition: background-color 0.15s;" onclick="window.location.href='/rfqs/?selected_id={{ r.id }}&search={{ search }}&status={{ status_filter }}#rfq-details-anchor'">
+          <td style="font-weight: 700; font-family: monospace; color: var(--primary-purple);">{{ r.rfq_number }}</td>
+          <td style="font-weight: 600; color: var(--text-dark);">{{ r.title }}</td>
+          <td style="color: #ef4444; font-weight: 600;">{{ r.deadline|date:"Y-m-d" }}</td>
+          <td style="color: var(--text-muted); font-size: 0.8rem;">{{ r.created_by.email }}</td>
+          <td>
+            <span class="badge" style="font-size: 0.65rem; 
+              {% if r.status == 'Draft' %}background-color: var(--status-draft-bg); color: var(--status-draft-text);
+              {% elif r.status == 'Sent' %}background-color: var(--status-sent-bg); color: var(--status-sent-text);
+              {% elif r.status == 'Received' %}background-color: var(--status-received-bg); color: var(--status-received-text);
+              {% elif r.status == 'Approved' or r.status == 'Compared' %}background-color: var(--status-approved-bg); color: var(--status-approved-text);
+              {% else %}background-color: var(--status-po-bg); color: var(--status-po-text);{% endif %}">
+              {{ r.status }}
+            </span>
+          </td>
+          <td style="text-align: right;" onclick="event.stopPropagation();">
+            <a href="/rfqs/?selected_id={{ r.id }}&search={{ search }}&status={{ status_filter }}#rfq-details-anchor" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.75rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">
+              <i data-lucide="eye" style="width: 12px; height: 12px;"></i> View Details
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;">
+            No RFQs match your filters. Click "+ Create RFQ" above to get started.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Anchor for smooth scrolling to details -->
+<div id="rfq-details-anchor" style="padding-top: 5px;"></div>
+
+<!-- Full-Width Selected RFQ Details (Below) -->
+<div style="width: 100%;">
+  {% if selected_rfq %}
+  <div class="card" style="padding-top: 0; padding-left: 0; padding-right: 0; border-top: 4px solid var(--primary-purple); box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+    
+    <!-- Odoo-like workflow status progress bar -->
+    <div class="document-status-bar" style="margin-left: 0; margin-right: 0; margin-top: 0; padding: 12px 25px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: flex-end; gap: 10px;">
+      <span style="margin-right: auto; font-size: 0.85rem; color: var(--text-muted); font-weight: 600;">Status Tracker: <span style="font-family: monospace; color: var(--text-dark);">{{ selected_rfq.rfq_number }}</span></span>
+      <span class="status-step {% if selected_rfq.status == 'Draft' %}active{% elif selected_rfq.status != 'Draft' %}completed{% endif %}">Draft</span>
+      <span style="color:#cbd5e1;">&rarr;</span>
+      <span class="status-step {% if selected_rfq.status == 'Sent' %}active{% elif selected_rfq.status != 'Draft' and selected_rfq.status != 'Sent' %}completed{% endif %}">Sent / Simulated</span>
+      <span style="color:#cbd5e1;">&rarr;</span>
+      <span class="status-step {% if selected_rfq.status == 'Received' %}active{% elif selected_rfq.status == 'Compared' or selected_rfq.status == 'Approved' or selected_rfq.status == 'PO_Generated' %}completed{% endif %}">Received</span>
+      <span style="color:#cbd5e1;">&rarr;</span>
+      <span class="status-step {% if selected_rfq.status == 'Compared' %}active{% elif selected_rfq.status == 'Approved' or selected_rfq.status == 'PO_Generated' %}completed{% endif %}">Compared</span>
+      <span style="color:#cbd5e1;">&rarr;</span>
+      <span class="status-step {% if selected_rfq.status == 'Approved' %}active{% elif selected_rfq.status == 'PO_Generated' %}completed{% endif %}">Approved</span>
+      <span style="color:#cbd5e1;">&rarr;</span>
+      <span class="status-step {% if selected_rfq.status == 'PO_Generated' %}active{% endif %}">PO Issued</span>
+    </div>
+
+    <div style="padding: 20px 25px 25px 25px;">
+      <!-- RFQ Header Info -->
+      <div style="display: flex; justify-content: space-between; align-items: start; border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 20px;">
+        <div>
+          <h2 style="font-size: 1.4rem; color: var(--text-dark); display: flex; align-items: center; gap: 8px; margin: 0;">
+            {{ selected_rfq.title }}
+            <span style="font-family: monospace; font-size: 1rem; color: var(--text-muted); font-weight: 500;">({{ selected_rfq.rfq_number }})</span>
+          </h2>
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 6px; margin-bottom: 0;">Created by: <strong>{{ selected_rfq.created_by.email }}</strong> | Deadline: <strong style="color: #ef4444;">{{ selected_rfq.deadline|date:"Y-m-d" }}</strong></p>
+        </div>
+        
+        <div style="display: flex; gap: 10px;">
+          {% if selected_rfq.status == 'Draft' and request.user.role == 'Officer' or request.user.role == 'Admin' %}
+          <form method="POST" action="/rfqs/" style="margin:0;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="send_rfq">
+            <input type="hidden" name="rfq_id" value="{{ selected_rfq.id }}">
+            <button type="submit" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 6px;">
+              <i data-lucide="send" style="width: 14px; height: 14px;"></i> Publish & Invite Vendors
+            </button>
+          </form>
+          {% endif %}
+
+          {% if request.user.role == 'Vendor' and selected_rfq.status == 'Sent' %}
+          <a href="/quotations/" class="btn btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+            <i data-lucide="edit-3" style="width: 14px; height: 14px;"></i> Submit Quote Bid
+          </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="margin-bottom: 25px;">
+        <h3 style="font-size: 0.95rem; margin-bottom: 8px; color: var(--text-dark);">Description / Scope of Work</h3>
+        <p style="font-size: 0.85rem; color: #475569; line-height: 1.5; background-color: #f8fafc; padding: 12px; border-radius: 6px; border: 1px solid var(--border-color); margin: 0;">
+          {{ selected_rfq.description|default:"No description provided." }}
+        </p>
+      </div>
+
+        <!-- Line items table -->
+        <div style="margin-bottom: 25px;">
+          <h3 style="font-size: 0.95rem; margin-bottom: 10px; color: var(--text-dark);">Specification Products Required</h3>
+          <div class="table-container">
+            <table class="erp-table">
+              <thead>
+                <tr>
+                  <th>Product Name</th>
+                  <th>Specifications</th>
+                  <th>Quantity Required</th>
+                  <th>Expected Target Price</th>
+                  <th>Target Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in selected_rfq.items %}
+                <tr>
+                  <td style="font-weight: 600;">{{ item.name }}</td>
+                  <td>{{ item.spec }}</td>
+                  <td>{{ item.qty }}</td>
+                  <td>₹{{ item.expected_price|floatformat:2 }}</td>
+                  <td>₹{{ item.qty|multiply:item.expected_price|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Assigned vendors list -->
+        <div style="margin-bottom: 25px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+          <h3 style="font-size: 0.95rem; margin-bottom: 10px; color: var(--text-dark);">Assigned Vendors</h3>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+            {% for v in selected_rfq.assigned_vendors.all %}
+            <div style="background-color: #f1f5f9; padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid #cbd5e1; display: flex; align-items: center; gap: 6px;">
+              <span style="color: var(--text-dark); font-weight: 600;">{{ v.name }}</span>
+              <span style="color: var(--text-muted);">({{ v.category }})</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Bids list -->
+        <div style="border-top: 1px solid var(--border-color); padding-top: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="font-size: 0.95rem; color: var(--text-dark); margin: 0;">Supplier Quotations Submitted</h3>
+            {% if selected_quotes|length >= 2 and request.user.role == 'Officer' or request.user.role == 'Admin' %}
+            <a href="/rfqs/{{ selected_rfq.id }}/compare/" class="btn btn-secondary" style="text-decoration: none; padding: 5px 12px; font-size: 0.8rem;">
+              <i data-lucide="bar-chart-2" style="width: 14px; height: 14px;"></i> Compare Bids (Radar Comparison) &rarr;
+            </a>
+            {% endif %}
+          </div>
+          
+          <div class="table-container">
+            <table class="erp-table">
+              <thead>
+                <tr>
+                  <th>Vendor</th>
+                  <th>Subtotal</th>
+                  <th>Tax (GST)</th>
+                  <th>Total Quote</th>
+                  <th>Delivery Days</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for quote in selected_quotes %}
+                <tr>
+                  <td style="font-weight: 600;">
+                    {{ quote.vendor.name }}
+                  </td>
+                  <td>₹{{ quote.subtotal|floatformat:2 }}</td>
+                  <td>₹{{ quote.tax_amount|floatformat:2 }}</td>
+                  <td style="font-weight: 700; color: var(--primary-purple);">₹{{ quote.total_price|floatformat:2 }}</td>
+                  <td>{{ quote.delivery_timeline_days }} Days</td>
+                  <td>
+                    <span class="badge" style="font-size: 0.65rem;
+                      {% if quote.status == 'Submitted' %}background-color: #e0f2fe; color: #0369a1;
+                      {% elif quote.status == 'Shortlisted' %}background-color: #fef3c7; color: #b45309;
+                      {% elif quote.status == 'Approved' %}background-color: #dcfce7; color: #15803d;
+                      {% else %}background-color: #fee2e2; color: #b91c1c;{% endif %}">
+                      {{ quote.status }}
+                    </span>
+                  </td>
+                  <td>
+                    {% if quote.status == 'Approved' and selected_rfq.status == 'Approved' and request.user.role == 'Officer' or request.user.role == 'Admin' %}
+                    <form method="POST" action="/rfqs/" style="margin: 0;">
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="create_po">
+                      <input type="hidden" name="quote_id" value="{{ quote.id }}">
+                      <button type="submit" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.75rem;">Generate PO</button>
+                    </form>
+                    {% elif selected_rfq.status == 'Received' and request.user.role == 'Officer' or request.user.role == 'Admin' %}
+                    <a href="/rfqs/{{ selected_rfq.id }}/compare/" class="btn btn-outline" style="text-decoration: none; padding: 4px 8px; font-size: 0.75rem;">Shortlist / View</a>
+                    {% else %}
+                    <span style="font-size: 0.8rem; color: var(--text-muted);">-</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 15px;">
+                    {% if selected_rfq.status == 'Draft' %}
+                    Publish the RFQ to invite vendors and receive bids.
+                    {% else %}
+                    No quotations submitted yet. Bidding simulations run instantly upon RFQ publication!
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+    {% else %}
+    <div class="card" style="padding: 50px; text-align: center; color: var(--text-muted);">
+      <i data-lucide="file-text" style="width: 48px; height: 48px; stroke-width: 1.5; color: var(--border-color); margin-bottom: 15px;"></i>
+      <h3>No RFQ Selected</h3>
+      <p style="font-size: 0.85rem; margin-top: 5px;">Select an RFQ from the left ledger to manage workflow status, view products target target prices, and evaluate supplier quotes.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Create RFQ Modal -->
+<div id="rfq-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4); z-index: 999; justify-content: center; align-items: center;">
+  <div class="card" style="width: 800px; margin-bottom: 0; max-height: 90vh; overflow-y: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 15px; margin-bottom: 20px;">
+      <h2 style="font-size: 1.2rem; color: var(--text-dark); margin: 0;">Create Request for Quotation</h2>
+      <button onclick="toggleRFQModal(false)" style="background: transparent; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+    </div>
+    
+    <form method="POST" action="/rfqs/" id="rfq-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create">
+      <input type="hidden" name="should_send" id="should-send-input" value="false">
+      
+      <div class="form-group">
+        <label class="form-label">RFQ Title *</label>
+        <input type="text" name="title" required placeholder="e.g. Procurement of Office Laptops" class="form-control">
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Bid Submission Deadline *</label>
+          <input type="date" name="deadline" required class="form-control" id="deadline-input">
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Assign Target Vendors *</label>
+          <select name="assigned_vendors" required multiple class="form-control" style="height: 100px;">
+            {% for vendor in active_vendors %}
+            <option value="{{ vendor.id }}">{{ vendor.name }} ({{ vendor.category }} - ★ {{ vendor.rating }})</option>
+            {% endfor %}
+          </select>
+          <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 3px;">Hold Ctrl (Cmd) to select multiple suppliers.</small>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Description / Scope of Work</label>
+        <textarea name="description" rows="3" placeholder="Provide general details, requirements, terms of delivery..." class="form-control"></textarea>
+      </div>
+
+      <!-- Specification Lines (Dynamic) -->
+      <div style="border-top: 1px solid var(--border-color); padding-top: 15px; margin-bottom: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 style="font-size: 0.95rem; color: var(--text-dark); margin: 0;">Specification Line Items</h3>
+          <button type="button" onclick="addProductLine()" class="btn btn-outline" style="padding: 4px 10px; font-size: 0.8rem;">
+            + Add a Line
+          </button>
+        </div>
+        
+        <div class="table-container" style="border-color: #cbd5e1;">
+          <table class="erp-table" id="spec-lines-table">
+            <thead>
+              <tr style="background-color: #f1f5f9;">
+                <th>Product Name *</th>
+                <th>Detailed Specs</th>
+                <th style="width: 100px;">Qty *</th>
+                <th style="width: 150px;">Target Unit Price (₹) *</th>
+                <th style="width: 60px; text-align: center;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="spec-lines-body">
+              <tr>
+                <td><input type="text" name="item_name" required placeholder="e.g. ThinkPad L14" class="form-control" style="padding: 6px 10px; font-size: 0.8rem;"></td>
+                <td><input type="text" name="item_spec" placeholder="e.g. i7, 16GB RAM, 512GB SSD" class="form-control" style="padding: 6px 10px; font-size: 0.8rem;"></td>
+                <td><input type="number" name="item_qty" required min="1" value="1" class="form-control" style="padding: 6px 10px; font-size: 0.8rem;"></td>
+                <td><input type="number" name="item_expected_price" required min="1" value="800" class="form-control" style="padding: 6px 10px; font-size: 0.8rem;"></td>
+                <td style="text-align: center;"><button type="button" onclick="removeProductLine(this)" style="background:transparent; border:none; color:red; cursor:pointer; font-size: 1.1rem;">&times;</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 12px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+        <button type="button" onclick="toggleRFQModal(false)" class="btn btn-outline">Cancel</button>
+        <button type="button" onclick="submitRFQForm(false)" class="btn btn-outline" style="border-color: var(--primary-purple); color: var(--primary-purple);">Save Draft</button>
+        <button type="button" onclick="submitRFQForm(true)" class="btn btn-primary">Save and Publish (Live simulation)</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Set default deadline to 7 days from now
+  if (document.getElementById('deadline-input')) {
+    const today = new Date();
+    today.setDate(today.getDate() + 7);
+    document.getElementById('deadline-input').value = today.toISOString().split('T')[0];
+  }
+
+  // Smooth scroll to selected RFQ details on page load if selected
+  window.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('selected_id')) {
+      const detailsAnchor = document.getElementById('rfq-details-anchor');
+      if (detailsAnchor) {
+        setTimeout(() => {
+          detailsAnchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 150);
+      }
+    }
+  });
+
+  function toggleRFQModal(show) {
+    document.getElementById('rfq-modal').style.display = show ? 'flex' : 'none';
+  }
+
+  function addProductLine() {
+    const tbody = document.getElementById('spec-lines-body');
+    const newTr = document.createElement('tr');
+    newTr.innerHTML = `
+      <td><input type="text" name="item_name" required placeholder="Product Name" class="form-control" style="padding: 6px 10px; font-size: 0.8rem;"></td>
+      <td><input type="text" name="item_spec" placeholder="Specifications" class="form-control" style="padding: 6px 10px; font-size: 0.8rem;"></td>
+      <td><input type="number" name="item_qty" required min="1" value="1" class="form-control" style="padding: 6px 10px; font-size: 0.8rem;"></td>
+      <td><input type="number" name="item_expected_price" required min="1" value="100" class="form-control" style="padding: 6px 10px; font-size: 0.8rem;"></td>
+      <td style="text-align: center;"><button type="button" onclick="removeProductLine(this)" style="background:transparent; border:none; color:red; cursor:pointer; font-size: 1.1rem;">&times;</button></td>
+    `;
+    tbody.appendChild(newTr);
+  }
+
+  function removeProductLine(btn) {
+    const row = btn.closest('tr');
+    const tbody = document.getElementById('spec-lines-body');
+    if (tbody.children.length > 1) {
+      row.remove();
+    } else {
+      alert('You must have at least one line item.');
+    }
+  }
+
+  function submitRFQForm(publish) {
+    document.getElementById('should-send-input').value = publish ? 'true' : 'false';
+    document.getElementById('rfq-form').submit();
+  }
+</script>
+{% endblock %}

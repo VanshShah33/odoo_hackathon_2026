@@ -1,0 +1,277 @@
+{% extends 'procurement/base.html' %}
+{% load static %}
+{% load procurement_filters %}
+
+{% block page_title %}RFQ Comparison{% endblock %}
+
+{% block extra_css %}
+<style>
+  .comparison-card {
+    border-top: 4px solid var(--primary-purple);
+  }
+  .savings-positive {
+    color: #15803d;
+    background-color: #dcfce7;
+  }
+  .savings-negative {
+    color: #b91c1c;
+    background-color: #fee2e2;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+  <div>
+    <h1 style="display: flex; align-items: center; gap: 8px;">
+      <a href="/rfqs/?selected_id={{ rfq.id }}" style="color: var(--text-muted); text-decoration: none;"><i data-lucide="arrow-left" style="width: 20px; height: 20px; vertical-align: middle;"></i></a>
+      Bid Comparison Matrix
+    </h1>
+    <p class="subtitle" style="margin-bottom: 0;">Evaluation of submitted quotes for <strong style="font-family: monospace;">{{ rfq.rfq_number }}</strong>: {{ rfq.title }}</p>
+  </div>
+  
+  <div style="display: flex; gap: 10px;">
+    <button onclick="exportMatrixToCSV()" class="btn btn-outline">
+      <i data-lucide="download" style="width: 16px; height: 16px;"></i> Download Excel Report
+    </button>
+    <a href="/rfqs/?selected_id={{ rfq.id }}" class="btn btn-outline">Back to RFQ</a>
+  </div>
+</div>
+
+<!-- Expected vs Quotes Summary -->
+<div class="grid-3" style="margin-bottom: 30px;">
+  <!-- Target Budget Card -->
+  <div class="stat-card" style="background-color: white; border: 1px solid var(--border-color);">
+    <div class="stat-icon" style="background-color: rgba(0, 160, 157, 0.1); color: var(--secondary-teal);">
+      <i data-lucide="target"></i>
+    </div>
+    <div class="stat-info">
+      <span class="stat-label">Expected Target Budget</span>
+      <span class="stat-value">₹{{ expected_total|floatformat:2 }}</span>
+    </div>
+  </div>
+
+  {% for quote in quotes %}
+  {% if forloop.counter <= 2 %}
+  <!-- Vendor Bid Card -->
+  <div class="stat-card comparison-card" style="background-color: white; border: 1px solid var(--border-color); border-top-color: {% if forloop.first %}var(--primary-purple){% else %}var(--secondary-teal){% endif %};">
+    <div class="stat-icon" style="background-color: rgba(21, 76, 26, 0.1); color: var(--primary-purple);">
+      <i data-lucide="package"></i>
+    </div>
+    <div class="stat-info" style="flex-grow: 1;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span class="stat-label" style="font-weight: 700; color: var(--text-dark);">{{ quote.vendor.name }}</span>
+        
+        <!-- Cost Saving calculation -->
+        {% widthratio expected_total 1 100 as base_exp %}
+        {% widthratio quote.total_price 1 100 as base_quote %}
+        {% if expected_total > quote.total_price %}
+        <span class="badge savings-positive" style="font-size: 0.65rem;">
+          Saved {{ quote.vendor.cost_saving_percentage }}%
+        </span>
+        {% else %}
+        <span class="badge savings-negative" style="font-size: 0.65rem;">
+          +{{ quote.vendor.cost_saving_percentage }}% Cost
+        </span>
+        {% endif %}
+      </div>
+      <span class="stat-value" style="font-size: 1.25rem; margin-top: 3px;">₹{{ quote.total_price|floatformat:2 }}</span>
+      <span style="font-size: 0.75rem; color: var(--text-muted);">Delivery: <strong>{{ quote.delivery_timeline_days }} Days</strong> | Rating: <strong>★ {{ quote.vendor.rating }}</strong></span>
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+
+<!-- Radar Chart and Details Matrix Grid -->
+<div class="grid-2" style="margin-bottom: 30px; grid-template-columns: 450px 1fr;">
+  <!-- Radar Chart Comparison -->
+  <div class="card" style="margin-bottom: 0; display: flex; flex-direction: column;">
+    <h2 class="card-title">Radar Parameter Comparison</h2>
+    <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: -10px; margin-bottom: 15px;">Comparative metrics across Price, Delivery Speed, Ratings, Risk Mitigation, and History.</p>
+    <div style="position: relative; height: 320px; width: 100%; flex-grow: 1;">
+      <canvas id="vendorRadarChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Bid Evaluation Matrix Table -->
+  <div class="card" style="margin-bottom: 0;">
+    <h2 class="card-title">Detailed Bid Matrix</h2>
+    <div class="table-container">
+      <table class="erp-table" id="comparison-matrix-table">
+        <thead>
+          <tr>
+            <th>Parameter / Product</th>
+            <th style="background-color: #f8fafc; font-weight: 700;">Target Expectations</th>
+            {% for quote in quotes %}
+            <th style="text-align: center; color: var(--primary-purple);">{{ quote.vendor.name }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Item specifications price comparison -->
+          {% for item in rfq.items %}
+          {% with item_idx=forloop.counter0 %}
+          <tr>
+            <td style="font-weight: 600;">{{ item.name }} (Qty: {{ item.qty }})</td>
+            <td style="background-color: #f8fafc; font-family: monospace;">₹{{ item.expected_price|floatformat:2 }} / unit</td>
+            {% for quote in quotes %}
+            <td style="text-align: center; font-family: monospace;">
+              <!-- Find corresponding item in quote if mapped or estimate -->
+              {% with quote_item=quote.items_quotation|index:item_idx %}
+              ₹{{ quote_item.unit_price|default:item.expected_price|floatformat:2 }}
+              {% endwith %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endwith %}
+          {% endfor %}
+
+          <!-- Totals -->
+          <tr style="border-top: 2px solid var(--border-color); font-weight: 700; background-color: #f8fafc;">
+            <td style="font-weight: 700;">Total Bid Amount</td>
+            <td style="background-color: #f1f5f9;">₹{{ expected_total|floatformat:2 }}</td>
+            {% for quote in quotes %}
+            <td style="text-align: center; color: var(--primary-purple); font-size: 1rem;">₹{{ quote.total_price|floatformat:2 }}</td>
+            {% endfor %}
+          </tr>
+
+          <!-- Other Parameters -->
+          <tr>
+            <td style="font-weight: 600;">Delivery Timeline</td>
+            <td style="background-color: #f8fafc;">7 Days (Target)</td>
+            {% for quote in quotes %}
+            <td style="text-align: center;">{{ quote.delivery_timeline_days }} Days</td>
+            {% endfor %}
+          </tr>
+
+          <tr>
+            <td style="font-weight: 600;">Vendor Quality Rating</td>
+            <td style="background-color: #f8fafc;">★ 4.5+ Preferred</td>
+            {% for quote in quotes %}
+            <td style="text-align: center;">★ {{ quote.vendor.rating|floatformat:1 }}</td>
+            {% endfor %}
+          </tr>
+
+          <tr>
+            <td style="font-weight: 600;">Vendor Compliance Risk</td>
+            <td style="background-color: #f8fafc;">&lt; 20% Preferred</td>
+            {% for quote in quotes %}
+            <td style="text-align: center;">
+              <span class="badge" style="font-size:0.65rem; {% if quote.vendor.risk_score > 30 %}background-color:#fee2e2; color:#b91c1c;{% else %}background-color:#dcfce7; color:#15803d;{% endif %}">
+                {{ quote.vendor.risk_score }}% (Risk)
+              </span>
+            </td>
+            {% endfor %}
+          </tr>
+
+          <!-- Action buttons row -->
+          {% if rfq.status == 'Received' or rfq.status == 'Sent' %}
+          <tr style="background-color: #ffffff;">
+            <td style="font-weight: 600; vertical-align: middle;">Actions</td>
+            <td style="background-color: #f8fafc;">-</td>
+            {% for quote in quotes %}
+            <td style="text-align: center; padding: 15px 5px;">
+              {% if quote.status == 'Submitted' %}
+              <form method="POST" action="/rfqs/{{ rfq.id }}/compare/" style="margin:0;">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="request_approval">
+                <input type="hidden" name="quote_id" value="{{ quote.id }}">
+                <button type="submit" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.75rem; width: 100%;">
+                  Generate Approval Request
+                </button>
+              </form>
+              {% else %}
+              <span class="badge" style="background-color: #fef3c7; color: #b45309; font-size: 0.65rem;">
+                {{ quote.status }}
+              </span>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Radar Chart Configuration
+  const radarCtx = document.getElementById('vendorRadarChart').getContext('2d');
+  
+  const labels = {{ radar_labels_json|safe }};
+  const rawDatasets = {{ radar_datasets_json|safe }};
+  
+  // Map datasets to add styling
+  const colorsList = [
+    { border: '#714B67', bg: 'rgba(113, 75, 103, 0.1)' },
+    { border: '#00A09D', bg: 'rgba(0, 160, 157, 0.1)' },
+    { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' }
+  ];
+
+  const datasets = rawDatasets.map((ds, idx) => {
+    const color = colorsList[idx % colorsList.length];
+    return {
+      label: ds.label,
+      data: ds.data,
+      borderColor: color.border,
+      backgroundColor: color.bg,
+      borderWidth: 2,
+      pointBackgroundColor: color.border,
+      pointBorderColor: '#fff',
+      pointHoverBackgroundColor: '#fff',
+      pointHoverBorderColor: color.border
+    };
+  });
+
+  new Chart(radarCtx, {
+    type: 'radar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } }
+      },
+      scales: {
+        r: {
+          angleLines: { color: '#e2e8f0' },
+          grid: { color: '#e2e8f0' },
+          suggestedMin: 0,
+          suggestedMax: 100,
+          ticks: { font: { size: 8 }, stepSize: 20 }
+        }
+      }
+    }
+  });
+
+  // Client-side CSV Exporter
+  function exportMatrixToCSV() {
+    const table = document.getElementById('comparison-matrix-table');
+    let csv = [];
+    for (let i = 0; i < table.rows.length; i++) {
+      let row = [], cols = table.rows[i].cells;
+      for (let j = 0; j < cols.length; j++) {
+        // clean up cell text
+        let text = cols[j].innerText.replace(/(\r\n|\n|\r)/gm, " ").trim();
+        text = text.replace(/"/g, '""'); // escape double quotes
+        row.push('"' + text + '"');
+      }
+      csv.push(row.join(","));
+    }
+    
+    // Download
+    const csvContent = "data:text/csv;charset=utf-8," + csv.join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "RFQ_Comparison_Report_{{ rfq.rfq_number }}.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+</script>
+{% endblock %}

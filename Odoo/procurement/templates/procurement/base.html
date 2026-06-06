@@ -1,0 +1,677 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VendorBridge ERP</title>
+  <link rel="stylesheet" href="{% static 'procurement/css/styles.css' %}">
+  <script>
+    // Theme Switcher Initialization (runs instantly before DOM renders to prevent flash of wrong theme)
+    (function() {
+      const savedTheme = localStorage.getItem('erp_theme') || 'purple';
+      const root = document.documentElement;
+      
+      if (savedTheme === 'teal') {
+        root.style.setProperty('--primary-purple', '#00A09D');
+        root.style.setProperty('--primary-purple-hover', '#008785');
+        root.style.setProperty('--sidebar-active', '#00A09D');
+        root.style.setProperty('--secondary-teal', '#714B67');
+        root.style.setProperty('--secondary-teal-hover', '#5c3c54');
+      } else if (savedTheme === 'green') {
+        root.style.setProperty('--primary-purple', '#0f766e');
+        root.style.setProperty('--primary-purple-hover', '#115e59');
+        root.style.setProperty('--sidebar-active', '#0f766e');
+        root.style.setProperty('--secondary-teal', '#0d9488');
+        root.style.setProperty('--secondary-teal-hover', '#0f766e');
+      } else if (savedTheme === 'dark') {
+        root.style.setProperty('--bg-light', '#0f172a');
+        root.style.setProperty('--card-bg', '#1e293b');
+        root.style.setProperty('--text-dark', '#f8fafc');
+        root.style.setProperty('--text-muted', '#94a3b8');
+        root.style.setProperty('--border-color', '#334155');
+        root.style.setProperty('--sidebar-bg', '#0f172a');
+        root.style.setProperty('--primary-purple', '#c084fc');
+        root.style.setProperty('--primary-purple-hover', '#a855f7');
+        root.style.setProperty('--secondary-teal', '#2dd4bf');
+        root.style.setProperty('--secondary-teal-hover', '#14b8a6');
+      }
+    })();
+  </script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* Styling overrides/adjustments for Django template specific classes */
+    .app-container {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+    }
+    .main-layout {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .content-area {
+      flex-grow: 1;
+      padding: 30px;
+      overflow-y: auto;
+      background-color: var(--bg-light);
+    }
+    .sidebar-menu a {
+      text-decoration: none;
+      color: inherit;
+    }
+    .role-switcher-container select {
+      border: none;
+      background: transparent;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-dark);
+      outline: none;
+      cursor: pointer;
+    }
+    .notification-bell {
+      position: relative;
+      cursor: pointer;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px;
+      border-radius: 50%;
+      transition: background-color 0.2s;
+    }
+    .notification-badge {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background-color: #ef4444;
+      color: white;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 5px;
+      border-radius: 10px;
+      line-height: 1;
+    }
+    .dropdown-menu {
+      position: absolute;
+      top: 35px;
+      right: 0;
+      width: 300px;
+      background-color: white;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      z-index: 100;
+      display: none;
+    }
+    .dropdown-menu.show {
+      display: block;
+    }
+    .dropdown-header {
+      padding: 12px 15px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .dropdown-list {
+      list-style: none;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+    .dropdown-list-item {
+      padding: 12px 15px;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 0.8rem;
+    }
+    .dropdown-list-item.unread {
+      background-color: #f8fafc;
+      border-left: 3px solid var(--secondary-teal);
+    }
+    .dropdown-list-item-title {
+      font-weight: 700;
+      color: var(--text-dark);
+      margin-bottom: 2px;
+    }
+    .dropdown-list-item-desc {
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .dropdown-list-item-time {
+      font-size: 0.7rem;
+      color: #94a3b8;
+    }
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 9999;
+    }
+    .toast {
+      background-color: #1e293b;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
+    .sidebar-item svg, .sidebar-item i {
+      margin-right: 12px !important;
+    }
+    
+    /* Workflow Modal Styling */
+    .wf-tab-btn {
+      transition: all 0.2s;
+    }
+    .wf-tab-btn:hover {
+      background: rgba(113,75,103,0.05) !important;
+      color: var(--primary-purple) !important;
+    }
+    .wf-tab-btn.active {
+      color: var(--primary-purple) !important;
+      border-bottom: 3px solid var(--primary-purple) !important;
+    }
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+  <!-- Toast Feed -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <div class="app-container">
+    
+    <!-- Sidebar -->
+    <div class="sidebar no-print">
+      <div class="sidebar-brand">
+        <div class="sidebar-brand-logo">VB</div>
+        <span>VendorBridge</span>
+      </div>
+
+      <ul class="sidebar-menu">
+        <!-- Dashboard: All Roles -->
+        <a href="/">
+          <li class="sidebar-item {% if active_tab == 'dashboard' %}active{% endif %}">
+            <i data-lucide="layout-dashboard"></i>
+            <span>Dashboard</span>
+          </li>
+        </a>
+        
+        <!-- Vendors: Admin, Officer -->
+        {% if request.user.role == 'Admin' or request.user.role == 'Officer' %}
+        <a href="/vendors/">
+          <li class="sidebar-item {% if active_tab == 'vendors' %}active{% endif %}">
+            <i data-lucide="users"></i>
+            <span>Vendors</span>
+          </li>
+        </a>
+        {% endif %}
+        
+        <!-- Users: Admin -->
+        {% if request.user.role == 'Admin' %}
+        <a href="/users/">
+          <li class="sidebar-item {% if active_tab == 'users' %}active{% endif %}">
+            <i data-lucide="user-cog"></i>
+            <span>Users</span>
+          </li>
+        </a>
+        {% endif %}
+        
+        <!-- RFQs: Admin, Officer, Vendor -->
+        {% if request.user.role == 'Admin' or request.user.role == 'Officer' or request.user.role == 'Vendor' %}
+        <a href="/rfqs/">
+          <li class="sidebar-item {% if active_tab == 'rfqs' %}active{% endif %}">
+            <i data-lucide="file-text"></i>
+            <span>RFQ's</span>
+          </li>
+        </a>
+        {% endif %}
+        
+        <!-- Quotations: Admin, Officer, Vendor -->
+        {% if request.user.role == 'Admin' or request.user.role == 'Officer' or request.user.role == 'Vendor' %}
+        <a href="/quotations/">
+          <li class="sidebar-item {% if active_tab == 'quotations' %}active{% endif %}">
+            <i data-lucide="tag"></i>
+            <span>Quotations</span>
+          </li>
+        </a>
+        {% endif %}
+        
+        <!-- Approvals: Admin, Manager -->
+        {% if request.user.role == 'Admin' or request.user.role == 'Manager' %}
+        <a href="/approvals/">
+          <li class="sidebar-item {% if active_tab == 'approvals' %}active{% endif %}">
+            <i data-lucide="shield-check"></i>
+            <span>Approvals</span>
+          </li>
+        </a>
+        {% endif %}
+        
+        <!-- Purchase Orders: All Roles -->
+        <a href="/purchase-orders/">
+          <li class="sidebar-item {% if active_tab == 'purchase_orders' %}active{% endif %}">
+            <i data-lucide="file-check"></i>
+            <span>Purchase orders</span>
+          </li>
+        </a>
+        
+        <!-- Invoices: Admin, Officer -->
+        {% if request.user.role == 'Admin' or request.user.role == 'Officer' %}
+        <a href="/invoices/">
+          <li class="sidebar-item {% if active_tab == 'invoices' %}active{% endif %}">
+            <i data-lucide="receipt"></i>
+            <span>Invoices</span>
+          </li>
+        </a>
+        {% endif %}
+        
+        <!-- Reports: Admin, Officer, Manager -->
+        {% if request.user.role == 'Admin' or request.user.role == 'Officer' or request.user.role == 'Manager' %}
+        <a href="/reports/">
+          <li class="sidebar-item {% if active_tab == 'reports' %}active{% endif %}">
+            <i data-lucide="bar-chart-2"></i>
+            <span>Reports</span>
+          </li>
+        </a>
+        {% endif %}
+        
+        <!-- Activity: All Roles -->
+        <a href="/activity/">
+          <li class="sidebar-item {% if active_tab == 'activity' %}active{% endif %}">
+            <i data-lucide="activity"></i>
+            <span>Activity</span>
+          </li>
+        </a>
+        
+        <!-- Settings: All Roles -->
+        <a href="/settings/">
+          <li class="sidebar-item {% if active_tab == 'settings' %}active{% endif %}">
+            <i data-lucide="settings"></i>
+            <span>Settings</span>
+          </li>
+        </a>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+          <div style="display: flex; flex-direction: column;">
+            <span style="color: white; font-weight: bold; font-size: 0.95rem;">
+              {{ request.user.first_name|default:"vansh" }}
+            </span>
+            <span style="font-size: 0.8rem; color: #64748b; margin-top: 2px;">{{ request.user.role }}</span>
+          </div>
+          <form action="/logout/" method="post" style="margin: 0;">
+            {% csrf_token %}
+            <button type="submit" style="background: transparent; border: none; color: #ff3b30; cursor: pointer; font-weight: bold; font-size: 0.85rem;">
+              LOGOUT
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Viewport -->
+    <div class="main-layout">
+      
+      <!-- Top Navbar -->
+      <header class="top-navbar no-print">
+        <div class="navbar-left">
+          <span class="breadcrumbs">
+            <span>VendorBridge</span>
+            <i data-lucide="chevron-right" style="width: 14px; height: 14px; color: var(--text-muted);"></i>
+            <span style="color: var(--primary-purple);">{% block page_title %}Dashboard{% endblock %}</span>
+          </span>
+        </div>
+
+        <div class="navbar-right">
+          <!-- Dev Mode switcher -->
+          <div class="role-switcher-container">
+            <span class="role-switcher-label">Dev Mode Switcher:</span>
+            <select id="role-select" onchange="switchRole(this.value)">
+              <option value="Officer" {% if request.user.role == 'Officer' %}selected{% endif %}>Procurement Officer</option>
+              <option value="Manager" {% if request.user.role == 'Manager' %}selected{% endif %}>Manager / Approver</option>
+              <option value="Vendor" {% if request.user.role == 'Vendor' %}selected{% endif %}>Vendor</option>
+              <option value="Admin" {% if request.user.role == 'Admin' %}selected{% endif %}>Admin</option>
+            </select>
+          </div>
+
+          <!-- Workflow Guide Button -->
+          <button onclick="toggleWorkflowModal(true)" class="btn btn-outline" style="padding: 6px 14px; height: 35px; border-radius: 20px; font-size: 0.8rem; display: inline-flex; align-items: center; gap: 6px; border-color: var(--secondary-teal); color: var(--secondary-teal); background-color: transparent; cursor: pointer; margin-right: 12px;">
+            <i data-lucide="book-open" style="width: 16px; height: 16px;"></i> Workflow Guide
+          </button>
+
+          <!-- Notification Dropdown -->
+          <div style="position: relative;">
+            <div class="notification-bell" onclick="toggleNotifications()">
+              <i data-lucide="bell" style="width: 20px; height: 20px;"></i>
+              <span id="unread-count" class="notification-badge" style="display: none;">0</span>
+            </div>
+            
+            <div id="notification-dropdown" class="dropdown-menu">
+              <div class="dropdown-header">
+                <span id="dropdown-unread-text">Notifications (0 unread)</span>
+                <button onclick="markAllRead()" style="border: none; background: transparent; color: var(--secondary-teal); font-weight: 600; font-size: 0.75rem; cursor: pointer;">
+                  Mark all as read
+                </button>
+              </div>
+              <ul id="notification-list" class="dropdown-list">
+                <!-- Notifications load dynamically here -->
+              </ul>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Content viewport -->
+      <main class="content-area">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    function showToast(msg) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.innerHTML = `<i data-lucide="bell" style="width:16px;height:16px;"></i> <span>${msg}</span>`;
+      container.appendChild(toast);
+      lucide.createIcons();
+      setTimeout(() => {
+        toast.remove();
+      }, 5000);
+    }
+
+    function switchRole(role) {
+      window.location.href = `/switch-role/?role=${role}`;
+    }
+
+    function toggleNotifications() {
+      const dropdown = document.getElementById('notification-dropdown');
+      dropdown.classList.toggle('show');
+    }
+
+    // Close dropdown on click outside
+    window.addEventListener('click', function(e) {
+      if (!e.target.closest('.notification-bell') && !e.target.closest('#notification-dropdown')) {
+        document.getElementById('notification-dropdown').classList.remove('show');
+      }
+    });
+
+    // Audio sound for notification
+    function playNotificationSound() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+        gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        oscillator.start();
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        oscillator.stop(audioCtx.currentTime + 0.3);
+      } catch (e) {
+        console.warn('Audio feedback blocked by browser settings', e);
+      }
+    }
+
+    let lastUnreadCount = 0;
+    
+    async function fetchNotifications() {
+      try {
+        const res = await fetch('/api/notifications/');
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        const unreadList = data.filter(n => !n.read);
+        const unreadCount = unreadList.length;
+        
+        const badge = document.getElementById('unread-count');
+        const headerText = document.getElementById('dropdown-unread-text');
+        const list = document.getElementById('notification-list');
+        
+        if (unreadCount > 0) {
+          badge.textContent = unreadCount;
+          badge.style.display = 'block';
+          headerText.textContent = `Notifications (${unreadCount} unread)`;
+        } else {
+          badge.style.display = 'none';
+          headerText.textContent = `Notifications (0 unread)`;
+        }
+
+        // Live sound alert for new notification
+        if (unreadCount > lastUnreadCount && lastUnreadCount > 0) {
+          playNotificationSound();
+          showToast(`${unreadList[0].title}: ${unreadList[0].message}`);
+        }
+        lastUnreadCount = unreadCount;
+
+        // Populate dropdown list
+        list.innerHTML = '';
+        if (data.length === 0) {
+          list.innerHTML = '<li style="padding:20px;text-align:center;color:#94a3b8;font-size:0.85rem;">No notifications.</li>';
+        } else {
+          data.forEach(n => {
+            const time = new Date(n.timestamp).toLocaleTimeString();
+            const item = document.createElement('li');
+            item.className = `dropdown-list-item ${n.read ? '' : 'unread'}`;
+            item.innerHTML = `
+              <div class="dropdown-list-item-title">${n.title}</div>
+              <div class="dropdown-list-item-desc">${n.message}</div>
+              <div class="dropdown-list-item-time">${time}</div>
+            `;
+            list.appendChild(item);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to pull live notifications', err);
+      }
+    }
+
+    async function markAllRead() {
+      try {
+        const res = await fetch('/api/notifications/mark_all_read/', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json'
+          }
+        });
+        if (res.ok) {
+          fetchNotifications();
+          document.getElementById('notification-dropdown').classList.remove('show');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    // Start polling notifications
+    fetchNotifications();
+    setInterval(fetchNotifications, 4000);
+  </script>
+
+  <!-- Workflow Guide Modal -->
+  <div id="workflow-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 12px; width: 600px; max-width: 90%; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 10px 25px rgba(0,0,0,0.15); overflow: hidden;">
+      <!-- Modal Header -->
+      <div style="padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700; color: var(--text-dark); display: flex; align-items: center; gap: 8px;">
+          <i data-lucide="book-open" style="color: var(--secondary-teal); width: 20px; height: 20px;"></i>
+          VendorBridge ERP Workflow Guide
+        </h3>
+        <button onclick="toggleWorkflowModal(false)" style="border: none; background: transparent; font-size: 1.25rem; cursor: pointer; color: var(--text-muted);">&times;</button>
+      </div>
+
+      <!-- Modal Tabs -->
+      <div style="display: flex; border-bottom: 1px solid var(--border-color); background: #f1f5f9; padding: 0 10px;">
+        <button onclick="switchWorkflowTab('phase1')" class="wf-tab-btn active" id="wf-tab-phase1" style="padding: 12px 16px; border: none; background: transparent; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); border-bottom: 3px solid transparent; outline: none;">1. Onboarding</button>
+        <button onclick="switchWorkflowTab('phase2')" class="wf-tab-btn" id="wf-tab-phase2" style="padding: 12px 16px; border: none; background: transparent; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); border-bottom: 3px solid transparent; outline: none;">2. RFQ & Bids</button>
+        <button onclick="switchWorkflowTab('phase3')" class="wf-tab-btn" id="wf-tab-phase3" style="padding: 12px 16px; border: none; background: transparent; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); border-bottom: 3px solid transparent; outline: none;">3. Approval</button>
+        <button onclick="switchWorkflowTab('phase4')" class="wf-tab-btn" id="wf-tab-phase4" style="padding: 12px 16px; border: none; background: transparent; cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); border-bottom: 3px solid transparent; outline: none;">4. PO & Invoice</button>
+      </div>
+
+      <!-- Modal Content (Scrollable) -->
+      <div id="workflow-tab-content" style="padding: 20px; overflow-y: auto; flex-grow: 1; min-height: 280px; background: #fff;">
+        <!-- Filled dynamically -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div style="padding: 12px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: #f8fafc;">
+        <button onclick="toggleWorkflowModal(false)" class="btn btn-outline" style="padding: 8px 16px; font-size: 0.85rem;">Close Guide</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Workflow Guide Data
+    const workflowData = {
+      phase1: {
+        title: "Phase 1: Vendor Registration & Onboarding",
+        role: "Vendor & Admin",
+        badge: "Compliance Check Stage",
+        content: `
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <p style="font-size:0.88rem; line-height:1.6; color:var(--text-muted); margin:0;">
+              Establish compliant relations with suppliers before procurement begins:
+            </p>
+            <ul style="padding-left:20px; font-size:0.85rem; line-height:1.8; color:var(--text-dark); margin:0;">
+              <li><strong>Registration</strong>: Vendors sign up with their specialization category, GSTIN, and company details.</li>
+              <li><strong>Compliance Audit</strong>: Admin verifies the vendor's GSTIN and details.</li>
+              <li><strong>State Switch</strong>: Admin changes vendor status to <code>Active</code> to unlock RFQ bidding access.</li>
+            </ul>
+            <div style="background:#f0fdf4; border:1px solid #bbf7d0; padding:10px; border-radius:6px; font-size:0.8rem; color:#15803d; display:flex; align-items:center; gap:8px; margin-top:5px;">
+              <i data-lucide="check-circle" style="width:16px; height:16px; flex-shrink:0;"></i>
+              <span><strong>Tip:</strong> Log in as Admin to approve pending vendors under the "Vendors" dashboard page.</span>
+            </div>
+          </div>
+        `
+      },
+      phase2: {
+        title: "Phase 2: RFQ Creation & Quotation Bidding",
+        role: "Procurement Officer & Vendor",
+        badge: "RFQ Bids Loop",
+        content: `
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <p style="font-size:0.88rem; line-height:1.6; color:var(--text-muted); margin:0;">
+              Procurement officers request and receive bids from suppliers:
+            </p>
+            <ul style="padding-left:20px; font-size:0.85rem; line-height:1.8; color:var(--text-dark); margin:0;">
+              <li><strong>Create RFQ</strong>: Procurement Officer drafts and publishes a Request for Quotation (RFQ) with items, quantity, specifications, and deadline.</li>
+              <li><strong>Vendor Quotation</strong>: Active vendors receive alerts, review details, and submit pricing/timeline bids.</li>
+              <li><strong>Comparison Matrix</strong>: Officer views side-by-side bid evaluations on the RFQ Compare page.</li>
+            </ul>
+            <div style="background:#eff6ff; border:1px solid #bfdbfe; padding:10px; border-radius:6px; font-size:0.8rem; color:#1e40af; display:flex; align-items:center; gap:8px; margin-top:5px;">
+              <i data-lucide="info" style="width:16px; height:16px; flex-shrink:0;"></i>
+              <span><strong>Tip:</strong> Toggle role to Vendor using the Switcher to bid on the RFQ, then switch back to Officer.</span>
+            </div>
+          </div>
+        `
+      },
+      phase3: {
+        title: "Phase 3: Quotation Shortlisting & Manager Approval",
+        role: "Procurement Officer & Manager",
+        badge: "Approval Cycle",
+        content: `
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <p style="font-size:0.88rem; line-height:1.6; color:var(--text-muted); margin:0;">
+              Shortlist quotations and obtain authorized budget clearance:
+            </p>
+            <ul style="padding-left:20px; font-size:0.85rem; line-height:1.8; color:var(--text-dark); margin:0;">
+              <li><strong>Shortlist</strong>: Officer selects the optimal bid from the comparison view and submits for approval.</li>
+              <li><strong>Manager Review</strong>: Manager audits the request, inspects cost savings, and reviews specifications.</li>
+              <li><strong>Decision</strong>: Manager approves the quotation to release the purchase order, or rejects/sends back.</li>
+            </ul>
+            <div style="background:#fffbeb; border:1px solid #fef3c7; padding:10px; border-radius:6px; font-size:0.8rem; color:#b45309; display:flex; align-items:center; gap:8px; margin-top:5px;">
+              <i data-lucide="alert-triangle" style="width:16px; height:16px; flex-shrink:0;"></i>
+              <span><strong>Tip:</strong> Log in or switch to Manager to approve pending requests on the Approvals dashboard view.</span>
+            </div>
+          </div>
+        `
+      },
+      phase4: {
+        title: "Phase 4: Purchase Order Release & Invoice Clearance",
+        role: "Vendor & Officer & Finance",
+        badge: "Execution & Payment",
+        content: `
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <p style="font-size:0.88rem; line-height:1.6; color:var(--text-muted); margin:0;">
+              Finalize order details, shipment tracking, and invoice payments:
+            </p>
+            <ul style="padding-left:20px; font-size:0.85rem; line-height:1.8; color:var(--text-dark); margin:0;">
+              <li><strong>Purchase Order</strong>: System automatically issues a PO to the vendor. Vendor acknowledges and updates shipping dates.</li>
+              <li><strong>Tax Invoice</strong>: Once items are delivered, the system generates a matching invoice.</li>
+              <li><strong>Three-Way Match</strong>: Officer matches and verifies the invoice details with the original PO and RFQ.</li>
+              <li><strong>Payment</strong>: Finance team marks the invoice as Paid, completing the cycle.</li>
+            </ul>
+            <div style="background:#f0fdf4; border:1px solid #bbf7d0; padding:10px; border-radius:6px; font-size:0.8rem; color:#15803d; display:flex; align-items:center; gap:8px; margin-top:5px;">
+              <i data-lucide="dollar-sign" style="width:16px; height:16px; flex-shrink:0;"></i>
+              <span><strong>Tip:</strong> The entire process is fully tracked in real-time in the system's interactive Activity Log.</span>
+            </div>
+          </div>
+        `
+      }
+    };
+
+    function toggleWorkflowModal(show) {
+      const modal = document.getElementById('workflow-modal');
+      modal.style.display = show ? 'flex' : 'none';
+      if (show) {
+        switchWorkflowTab('phase1');
+      }
+    }
+
+    function switchWorkflowTab(phaseKey) {
+      const data = workflowData[phaseKey];
+      if (!data) return;
+
+      // Update tabs UI
+      document.querySelectorAll('.wf-tab-btn').forEach(btn => btn.classList.remove('active'));
+      const activeBtn = document.getElementById('wf-tab-' + phaseKey);
+      if (activeBtn) activeBtn.classList.add('active');
+
+      // Update content
+      const contentArea = document.getElementById('workflow-tab-content');
+      contentArea.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px dashed var(--border-color);">
+          <h4 style="margin:0; font-size:1rem; font-weight:700; color:var(--primary-purple);">${data.title}</h4>
+          <span style="font-size:0.7rem; font-weight:700; background:rgba(0,160,157,0.1); color:var(--secondary-teal); padding:3px 8px; border-radius:20px; text-transform:uppercase;">${data.badge}</span>
+        </div>
+        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:15px;">
+          <strong>Responsible Roles:</strong> <span style="color:var(--text-dark); font-weight:600;">${data.role}</span>
+        </div>
+        <div>${data.content}</div>
+      `;
+      
+      // Re-trigger Lucide to draw new icons
+      lucide.createIcons();
+    }
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>
